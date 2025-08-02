@@ -2,8 +2,8 @@ name: AQI Prediction Pipeline
 
 on:
   schedule:
-    - cron: '0 */2 * * *'   # Data fetching every 2 hours
-    - cron: '0 6 * * *'      # Model training daily at 6 AM UTC
+    - cron: '0 */2 * * *'   # Data Fetch every 2 hours
+    - cron: '0 6 * * *'      # Model Training daily at 6 AM UTC
     - cron: '0 */6 * * *'    # Inference every 6 hours
   workflow_dispatch:         # Manual trigger
   push:
@@ -30,11 +30,13 @@ jobs:
         else
           echo "data-fetch=false" >> $GITHUB_OUTPUT
         fi
+
         if [[ "${{ github.event.schedule }}" == "0 6 * * *" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           echo "training=true" >> $GITHUB_OUTPUT
         else
           echo "training=false" >> $GITHUB_OUTPUT
         fi
+
         if [[ "${{ github.event.schedule }}" == "0 */6 * * *" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           echo "inference=true" >> $GITHUB_OUTPUT
         else
@@ -54,8 +56,7 @@ jobs:
     - name: Set environment variables
       run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Fetch latest AQI data
-      run: |
-        python data_fetching/fetch_aqi_data.py
+      run: python data_fetching/fetch_aqi_data.py
       env:
         AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
         WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
@@ -63,15 +64,15 @@ jobs:
     - name: Run feature engineering
       run: python feature_engineering/compute_features.py
       continue-on-error: true
-    - name: Commit and push data changes
+    - name: Commit and push data if changed
       run: |
-        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add data/
-        git diff-index --quiet HEAD || git commit -m "🔄 Update data: $(date -u)"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if [[ -n $(git status --porcelain) ]]; then
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/
+          git commit -m "🔄 Update data: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" || exit 0
+          git push
+        fi
 
   inference:
     runs-on: ubuntu-latest
@@ -86,21 +87,20 @@ jobs:
     - name: Set environment variables
       run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Run inference pipeline
-      run: |
-        python pipelines/inference_pipeline.py
+      run: python pipelines/inference_pipeline.py
       env:
         AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
         WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
       continue-on-error: true
-    - name: Commit and push predictions
+    - name: Commit and push predictions if changed
       run: |
-        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add data/predictions/
-        git diff-index --quiet HEAD || git commit -m "🔮 Update predictions: $(date -u)"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if [[ -n $(git status --porcelain data/predictions/) ]]; then
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/predictions/
+          git commit -m "🔮 Update predictions: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" || exit 0
+          git push
+        fi
 
   model-training:
     runs-on: ubuntu-latest
@@ -120,19 +120,20 @@ jobs:
     - name: Generate SHAP explanations
       run: python explainability/shap_explain.py
       continue-on-error: true
-    - name: Commit and push models
+    - name: Commit and push models if changed
       run: |
-        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add models/ explainability/
-        git diff-index --quiet HEAD || git commit -m "🤖 Update models and explanations: $(date -u)"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if [[ -n $(git status --porcelain models/ explainability/) ]]; then
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add models/ explainability/
+          git commit -m "🤖 Update models and explanations: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" || exit 0
+          git push
+        fi
 
   deploy-dashboard:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [data-fetching, inference, model-training]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -154,7 +155,7 @@ jobs:
     - name: Create deployment artifact
       run: echo "Dashboard ready for deployment" > deployment-ready.txt
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4   # UPDATED to v4
       with:
         name: dashboard-deployment
         path: deployment-ready.txt
