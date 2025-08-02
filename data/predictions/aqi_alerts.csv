@@ -1,0 +1,6 @@
+level,day,message,recommendation,timestamp,predicted_aqi_24h,predicted_aqi_48h,predicted_aqi_72h,predicted_aqi_avg
+UNHEALTHY,Day 1 (24h),Day 1 (24h) predicted AQI (163) indicates unhealthy air quality,"Limit outdoor activities, especially for sensitive individuals",2025-08-02 13:38:59.345651,163.2449213389572,180.99042582901131,174.1181422743688,172.7844964807791
+UNHEALTHY,Day 2 (48h),Day 2 (48h) predicted AQI (181) indicates unhealthy air quality,"Limit outdoor activities, especially for sensitive individuals",2025-08-02 13:38:59.345651,163.2449213389572,180.99042582901131,174.1181422743688,172.7844964807791
+UNHEALTHY,Day 3 (72h),Day 3 (72h) predicted AQI (174) indicates unhealthy air quality,"Limit outdoor activities, especially for sensitive individuals",2025-08-02 13:38:59.345651,163.2449213389572,180.99042582901131,174.1181422743688,172.7844964807791
+CHANGE_ALERT,Day 1 (24h),Day 1 (24h) significant AQI change predicted: 230 → 163,Monitor air quality closely,2025-08-02 13:38:59.345651,163.2449213389572,180.99042582901131,174.1181422743688,172.7844964807791
+CHANGE_ALERT,Day 3 (72h),Day 3 (72h) significant AQI change predicted: 230 → 174,Monitor air quality closely,2025-08-02 13:38:59.345651,163.2449213389572,180.99042582901131,174.1181422743688,172.7844964807791
