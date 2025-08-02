@@ -2,13 +2,10 @@ name: AQI Prediction Pipeline
 
 on:
   schedule:
-    # Run data fetching every 2 hours (more reasonable than every hour)
-    - cron: '0 */2 * * *'
-    # Run model training daily at 6 AM UTC
-    - cron: '0 6 * * *'
-    # Run inference every 6 hours
-    - cron: '0 */6 * * *'
-  workflow_dispatch:  # Allow manual triggering
+    - cron: '0 */2 * * *'  # Data Fetch every 2 hours
+    - cron: '0 6 * * *'     # Model Training daily at 6 AM UTC
+    - cron: '0 */6 * * *'   # Inference every 6 hours
+  workflow_dispatch:
   push:
     branches: [ main, develop ]
   pull_request:
@@ -49,59 +46,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'pull_request'
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy requests scikit-learn==1.3.2 joblib streamlit plotly shap pytest xgboost
-        pip install python-dotenv  # For environment variables
-    
-    - name: Create directory structure
-      run: |
-        mkdir -p data/raw data/features data/predictions models logs tests
-    
-    - name: Create test files if they don't exist
-      run: |
-        if [ ! -f "tests/__init__.py" ]; then
-          touch tests/__init__.py
-        fi
-        if [ ! -f "tests/test_basic.py" ]; then
-          cat > tests/test_basic.py << 'EOF'
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-        def test_imports():
-            """Test that core modules can be imported"""
-            try:
-                from data_fetching.fetch_aqi_data import AQIDataFetcher
-                from feature_engineering.compute_features import FeatureEngineer
-                from model_training.train_model import ModelTrainer
-                assert True
-            except ImportError as e:
-                assert False, f"Import failed: {e}"
-
-        def test_directory_structure():
-            """Test that required directories exist"""
-            required_dirs = ['data', 'models', 'logs']
-            for dir_name in required_dirs:
-                assert os.path.exists(dir_name), f"Directory {dir_name} does not exist"
-        EOF
-        fi
-    
     - name: Run tests
       run: |
         python -m pytest tests/ -v --tb=short
-    
     - name: Test module imports
       run: |
         python -c "
@@ -123,47 +76,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup]
     if: needs.setup.outputs.should-run-data-fetch == 'true'
-    
     steps:
     - uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy requests scikit-learn==1.3.2 joblib xgboost python-dotenv
-    
-    - name: Create directory structure
-      run: |
-        mkdir -p data/raw data/features data/predictions models logs
-    
     - name: Set environment variables
-      run: |
-        echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-    
+      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Fetch latest AQI data
-      run: |
-        cd ${{ github.workspace }}
-        python data_fetching/fetch_aqi_data.py
+      run: python data_fetching/fetch_aqi_data.py
       env:
         AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
         WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-      continue-on-error: true
-    
     - name: Run feature engineering
-      run: |
-        cd ${{ github.workspace }}
-        python feature_engineering/compute_features.py
-      continue-on-error: true
-    
+      run: python feature_engineering/compute_features.py
     - name: Check for changes
       id: check-changes
       run: |
@@ -172,7 +102,6 @@ jobs:
         else
           echo "changes=false" >> $GITHUB_OUTPUT
         fi
-    
     - name: Commit and push data
       if: steps.check-changes.outputs.changes == 'true'
       run: |
@@ -188,45 +117,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, data-fetching]
     if: always() && needs.setup.outputs.should-run-inference == 'true'
-    
     steps:
     - uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
-    
     - name: Pull latest changes
-      run: |
-        git pull origin main
-    
+      run: git pull origin main
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy requests scikit-learn==1.3.2 joblib xgboost python-dotenv
-    
-    - name: Create directory structure
-      run: |
-        mkdir -p data/raw data/features data/predictions models logs
-    
     - name: Set environment variables
-      run: |
-        echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-    
+      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Run inference pipeline
-      run: |
-        cd ${{ github.workspace }}
-        python pipelines/inference_pipeline.py
+      run: python pipelines/inference_pipeline.py
       env:
         AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
         WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-      continue-on-error: true
-    
     - name: Check for prediction changes
       id: check-predictions
       run: |
@@ -235,7 +143,6 @@ jobs:
         else
           echo "changes=false" >> $GITHUB_OUTPUT
         fi
-    
     - name: Commit and push predictions
       if: steps.check-predictions.outputs.changes == 'true'
       run: |
@@ -251,48 +158,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, data-fetching]
     if: always() && needs.setup.outputs.should-run-training == 'true'
-    
     steps:
     - uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
-    
     - name: Pull latest changes
-      run: |
-        git pull origin main
-    
+      run: git pull origin main
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy requests scikit-learn==1.3.2 joblib xgboost shap python-dotenv
-    
-    - name: Create directory structure
-      run: |
-        mkdir -p data/raw data/features data/predictions models logs explainability
-    
     - name: Set environment variables
-      run: |
-        echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-    
+      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Run model training
-      run: |
-        cd ${{ github.workspace }}
-        python model_training/train_model.py
-      continue-on-error: true
-    
+      run: python model_training/train_model.py
     - name: Generate SHAP explanations
-      run: |
-        cd ${{ github.workspace }}
-        python explainability/shap_explain.py
-      continue-on-error: true
-    
+      run: python explainability/shap_explain.py
     - name: Check for model changes
       id: check-models
       run: |
@@ -301,7 +183,6 @@ jobs:
         else
           echo "changes=false" >> $GITHUB_OUTPUT
         fi
-    
     - name: Commit and push models
       if: steps.check-models.outputs.changes == 'true'
       run: |
@@ -317,21 +198,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [test]
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pandas numpy requests scikit-learn==1.3.2 joblib streamlit plotly shap xgboost
-    
     - name: Test dashboard
       run: |
         python -c "
@@ -344,11 +216,8 @@ jobs:
             print(f'✗ Dashboard import failed: {e}')
             sys.exit(1)
         "
-    
     - name: Create deployment artifact
-      run: |
-        echo "Dashboard ready for deployment" > deployment-ready.txt
-    
+      run: echo "Dashboard ready for deployment" > deployment-ready.txt
     - name: Upload deployment artifact
       uses: actions/upload-artifact@v3
       with:
@@ -359,7 +228,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [data-fetching, inference, model-training, deploy-dashboard]
     if: always()
-    
     steps:
     - name: Workflow Summary
       run: |
