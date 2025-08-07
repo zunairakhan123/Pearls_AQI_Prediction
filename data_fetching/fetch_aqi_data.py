@@ -114,15 +114,17 @@ class AQIDataFetcher:
                 return pd.DataFrame()
     
     def save_data_to_csv(self, data, filename):
-        """Save data to CSV file in absolute path"""
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up to project root
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         raw_data_dir = os.path.join(base_dir, 'data', 'raw')
-        
-        # Ensure the directory exists
         os.makedirs(raw_data_dir, exist_ok=True)
         
         filepath = os.path.join(raw_data_dir, filename)
-        data.to_csv(filepath, index=False)
+
+        if os.path.exists(filepath):
+            data.to_csv(filepath, mode='a', header=False, index=False)
+        else:
+            data.to_csv(filepath, index=False)
+
         print(f"Data saved to {filepath}")
 
         
@@ -150,12 +152,12 @@ class AQIDataFetcher:
         
         # Fetch current AQI
         current_aqi = self.fetch_current_aqi_data()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        self.save_data_to_csv(current_aqi, f"aqi_data_live_{timestamp}.csv")
+        self.save_data_to_csv(current_aqi, "aqi_data_live.csv")
+
         
         # Fetch current weather
         current_weather = self.fetch_weather_data()
-        self.save_data_to_csv(current_weather, f"weather_data_live_{timestamp}.csv")
+        self.save_data_to_csv(current_weather, "weather_data_live.csv")
         
         print("Live data fetch completed!")
 
