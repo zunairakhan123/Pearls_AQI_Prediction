@@ -68,7 +68,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            pip install requests pandas numpy scikit-learn shap streamlit plotly
+            pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
@@ -108,7 +108,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            pip install requests pandas numpy scikit-learn shap streamlit plotly
+            pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
@@ -146,7 +146,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            pip install requests pandas numpy scikit-learn shap streamlit plotly
+            pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
@@ -180,7 +180,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            pip install requests pandas numpy scikit-learn shap streamlit plotly
+            pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
       - name: Test Dashboard Import
         run: |
