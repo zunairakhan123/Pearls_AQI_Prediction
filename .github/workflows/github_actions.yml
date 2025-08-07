@@ -64,6 +64,18 @@ jobs:
           git lfs install
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          lfs: true
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          lfs: true
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
       - name: Python setup
         uses: actions/setup-python@v4
         with:
@@ -136,11 +148,13 @@ jobs:
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
       - name: Commit & Push Predictions
         run: |
-          if [[ -n "$(git status --porcelain data/predictions/)" ]]; then
-            git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git pull origin ${{ github.ref }} --rebase || true
-            git add data/predictions/
+          # Pull latest changes first to avoid conflicts
+          git pull origin ${{ github.ref }} --rebase || true
+          
+          # Add prediction files (LFS will handle large files automatically)
+          git add data/predictions/ || true
+          
+          if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "🔮 Update predictions: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
             git push origin ${{ github.ref }}
           fi
@@ -174,11 +188,14 @@ jobs:
         run: python explainability/shap_explain.py
       - name: Commit & Push Model Updates
         run: |
-          if [[ -n "$(git status --porcelain models/ explainability/)" ]]; then
-            git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git pull origin ${{ github.ref }} --rebase || true
-            git add models/ explainability/
+          # Pull latest changes first to avoid conflicts
+          git pull origin ${{ github.ref }} --rebase || true
+          
+          # Add model and explainability files (LFS will handle large files automatically)
+          git add models/ || true
+          git add explainability/ || true
+          
+          if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "🤖 Update models & SHAP: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
             git push origin ${{ github.ref }}
           fi
