@@ -58,6 +58,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          lfs: true
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
       - name: Python setup
         uses: actions/setup-python@v4
         with:
@@ -79,12 +85,23 @@ jobs:
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
       - name: Feature Engineering
         run: python feature_engineering/compute_features.py
+      - name: Compress large files
+        run: |
+          # Compress large feature files
+          find data/features -name "*.csv" -size +50M -exec gzip {} \;
+          # Remove original large CSV files to avoid conflicts
+          find data/features -name "*.csv" -size +50M -delete || true
       - name: Commit & Push Updated Data
         run: |
-          if [[ -n "$(git status --porcelain data/)" ]]; then
-            git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git add data/
+          # Pull latest changes first to avoid conflicts
+          git pull origin ${{ github.ref }} --rebase || true
+          
+          # Add files (LFS will handle large files automatically)
+          git add data/raw/ || true
+          git add data/features/ || true
+          git add data/processed/ || true
+          
+          if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "🔄 Update data: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
             git push origin ${{ github.ref }}
           fi
@@ -122,6 +139,7 @@ jobs:
           if [[ -n "$(git status --porcelain data/predictions/)" ]]; then
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
+            git pull origin ${{ github.ref }} --rebase || true
             git add data/predictions/
             git commit -m "🔮 Update predictions: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
             git push origin ${{ github.ref }}
@@ -159,6 +177,7 @@ jobs:
           if [[ -n "$(git status --porcelain models/ explainability/)" ]]; then
             git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
+            git pull origin ${{ github.ref }} --rebase || true
             git add models/ explainability/
             git commit -m "🤖 Update models & SHAP: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
             git push origin ${{ github.ref }}
