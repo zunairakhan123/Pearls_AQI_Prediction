@@ -2,7 +2,7 @@ name: AQI Prediction Pipeline
 
 on:
   schedule:
-    - cron: '0 */1 * * *'   # Fetch data every 1 hours
+    - cron: '0 */2 * * *'   # Fetch data every 2 hours
     - cron: '0 6 * * *'     # Daily model training at 6 AM UTC
     - cron: '0 */6 * * *'   # Inference every 6 hours
   workflow_dispatch:        # Manual trigger enabled
@@ -26,9 +26,28 @@ jobs:
         name: Determine tasks to run
         run: |
           event="${{ github.event_name }}"
-          echo "data_fetch=$([[ \"$event\" == \"schedule\" || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "training=$([[ (\"$event\" == \"schedule\" && \"${{ github.event.schedule }}\" == \"0 6 * * *\") || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "inference=$([[ \"$event\" == \"schedule\" || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          schedule="${{ github.event.schedule }}"
+          
+          # Determine if data fetching should run
+          if [[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
+            echo "data_fetch=true" >> $GITHUB_OUTPUT
+          else
+            echo "data_fetch=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine if training should run (daily at 6 AM or manual/push)
+          if [[ ("$event" == "schedule" && "$schedule" == "0 6 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
+            echo "training=true" >> $GITHUB_OUTPUT
+          else
+            echo "training=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine if inference should run
+          if [[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
+            echo "inference=true" >> $GITHUB_OUTPUT
+          else
+            echo "inference=false" >> $GITHUB_OUTPUT
+          fi
 
   data-fetching:
     runs-on: ubuntu-latest
@@ -155,3 +174,4 @@ jobs:
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Dashboard Deploy: ${{ needs.deploy-dashboard.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Timestamp: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          
