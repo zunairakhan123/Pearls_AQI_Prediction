@@ -54,32 +54,24 @@ jobs:
     needs: setup
     if: needs.setup.outputs.should-fetch != 'false'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           lfs: true
+      
       - name: Setup Git LFS
         run: |
           git lfs install
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          lfs: true
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          lfs: true
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+      
       - name: Python setup
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -88,21 +80,26 @@ jobs:
           else
             pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
+      
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
       - name: Fetch Live AQI & Weather
         run: python data_fetching/fetch_aqi_data.py
         env:
           AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+      
       - name: Feature Engineering
         run: python feature_engineering/compute_features.py
+      
       - name: Compress large files
         run: |
           # Compress large feature files
           find data/features -name "*.csv" -size +50M -exec gzip {} \;
           # Remove original large CSV files to avoid conflicts
           find data/features -name "*.csv" -size +50M -delete || true
+      
       - name: Commit & Push Updated Data
         run: |
           # Pull latest changes first to avoid conflicts
@@ -123,14 +120,24 @@ jobs:
     needs: [setup, data-fetching]
     if: needs.setup.outputs.should-infer != 'false'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          lfs: true
+      
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      
       - name: Python setup
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -139,13 +146,16 @@ jobs:
           else
             pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
+      
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
       - name: Run Inference Pipeline
         run: python pipelines/inference_pipeline.py
         env:
           AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+      
       - name: Commit & Push Predictions
         run: |
           # Pull latest changes first to avoid conflicts
@@ -164,14 +174,24 @@ jobs:
     needs: [setup, data-fetching]
     if: needs.setup.outputs.should-train != 'false'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          lfs: true
+      
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      
       - name: Python setup
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -180,12 +200,16 @@ jobs:
           else
             pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
+      
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
       - name: Train Models
         run: python model_training/train_model.py
+      
       - name: Generate SHAP Explanations
         run: python explainability/shap_explain.py
+      
       - name: Commit & Push Model Updates
         run: |
           # Pull latest changes first to avoid conflicts
@@ -205,11 +229,14 @@ jobs:
     needs: [data-fetching, inference, model-training]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
       - name: Python setup
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -218,6 +245,7 @@ jobs:
           else
             pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
           fi
+      
       - name: Test Dashboard Import
         run: |
           python -c "
@@ -230,8 +258,10 @@ jobs:
               print('✗ Dashboard import failed:', e)
               exit(1)
           "
+      
       - name: Mark Deployment Ready
         run: echo "Dashboard ready for deployment" > deployment-ready.txt
+      
       - name: Upload Deployment Artifact
         uses: actions/upload-artifact@v4
         with:
