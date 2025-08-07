@@ -26,9 +26,9 @@ jobs:
         name: Determine tasks to run
         run: |
           event="${{ github.event_name }}"
-          echo "data_fetch=$([[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "training=$([[ ("$event" == "schedule" && "${{ github.event.schedule }}" == "0 6 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-          echo "inference=$([[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "data_fetch=$([[ \"$event\" == \"schedule\" || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "training=$([[ (\"$event\" == \"schedule\" && \"${{ github.event.schedule }}\" == \"0 6 * * *\") || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "inference=$([[ \"$event\" == \"schedule\" || \"$event\" == \"workflow_dispatch\" || \"$event\" == \"push\" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
   data-fetching:
     runs-on: ubuntu-latest
@@ -125,14 +125,15 @@ jobs:
       - name: Test Dashboard Import
         run: |
           python -c "
-import sys; sys.path.append('.')
-try:
-    import dashboard.app
-    print('Dashboard imports OK')
-except Exception as e:
-    print('Dashboard import failed:', e)
-    sys.exit(1)
-"
+          import sys
+          sys.path.append('.')
+          try:
+              import dashboard.app
+              print('✓ Dashboard imports successfully')
+          except Exception as e:
+              print('✗ Dashboard import failed:', e)
+              exit(1)
+          "
       - name: Mark Deployment Ready
         run: echo "Dashboard ready for deployment" > deployment-ready.txt
       - name: Upload Deployment Artifact
@@ -148,9 +149,9 @@ except Exception as e:
     steps:
       - name: Workflow Summary
         run: |
-          echo "##  AQI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 AQI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Data Fetch: ${{ needs.data-fetching.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Inference: ${{ needs.inference.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Dashboard Test: ${{ needs.deploy-dashboard.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dashboard Deploy: ${{ needs.deploy-dashboard.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Timestamp: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
