@@ -108,7 +108,7 @@ jobs:
           # Add files (LFS will handle large files automatically)
           git add data/raw/ || true
           git add data/features/ || true
-          git add data/processed/ || true
+          git add data/predictions/ || true
           
           if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "🔄 Update data: $(date -u '+%Y-%m-%d %H:%M UTC')" || exit 0
