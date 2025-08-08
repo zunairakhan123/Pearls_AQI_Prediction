@@ -1,2 +1,13 @@
-data/features/*.csv filter=lfs diff=lfs merge=lfs -text
-**.csv.gz filter=lfs diff=lfs merge=lfs -text
+# Only track recent large feature files with LFS (last 2-3 days)
+data/features/features_*_0[6-9][0-9][0-9].csv.gz filter=lfs diff=lfs merge=lfs -text
+data/features/features_*_1[0-9][0-9][0-9].csv.gz filter=lfs diff=lfs merge=lfs -text
+
+# Track small metadata files with LFS
+data/features/feature_metadata.csv filter=lfs diff=lfs merge=lfs -text
+
+# Track model files with LFS (usually smaller but binary)
+models/*.pkl filter=lfs diff=lfs merge=lfs -text
+models/*.joblib filter=lfs diff=lfs merge=lfs -text
+
+# Don't track older feature files or backfills with LFS anymore
+# They'll remain in git history but as regular files
