@@ -39,12 +39,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          lfs: true
+          lfs: false
       
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      # - name: Setup Git LFS
+      #   run: |
+      #     git lfs install
+      #     git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
       
       - uses: actions/setup-python@v4
         with:
@@ -123,12 +123,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          lfs: true
+          lfs: false
       
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      # - name: Setup Git LFS
+      #   run: |
+      #     git lfs install
+      #     git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
       
       - uses: actions/setup-python@v4
         with:
@@ -166,12 +166,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-          lfs: true
+          lfs: false
       
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      # - name: Setup Git LFS
+      #   run: |
+      #     git lfs install
+      #     git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
       
       - uses: actions/setup-python@v4
         with:
