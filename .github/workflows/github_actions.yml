@@ -40,23 +40,73 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           lfs: true
-      - run: git lfs install
+      
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
+      
+      - name: Install dependencies
+        run: |
           pip install --upgrade pip
           pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
-      - run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-      - run: python data_fetching/fetch_aqi_data.py
+      
+      - name: Set Python path
+        run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
+      - name: Fetch new data
+        run: python data_fetching/fetch_aqi_data.py
         env:
           AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-      - run: python feature_engineering/compute_features.py
-      - run: |
-          find data/features -name "*.csv" -size +50M -exec gzip {} \;
-          find data/features -name "*.csv" -size +50M -delete || true
-      - run: |
+      
+      - name: Compute features
+        run: python feature_engineering/compute_features.py
+      
+      - name: Implement data retention policy
+        run: |
+          echo "🗂️ Implementing data retention policy..."
+          cd data/features
+          
+          # List all feature files by date (newest first), keep only last 3
+          ls -t features_*.csv* 2>/dev/null | head -3 > keep_files.txt || touch keep_files.txt
+          
+          # Remove old files from LFS tracking if more than 3 exist
+          file_count=$(ls -1 features_*.csv* 2>/dev/null | wc -l || echo "0")
+          if [ "$file_count" -gt 3 ]; then
+            echo "Found $file_count feature files, cleaning up older ones..."
+            
+            for file in $(ls -t features_*.csv* 2>/dev/null | tail -n +4); do
+              echo "Removing $file from LFS tracking..."
+              git lfs untrack "data/features/$file" || true
+              
+              # Compress if not already compressed and larger than 10MB
+              if [[ "$file" != *.gz ]] && [[ $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null) -gt 10485760 ]]; then
+                echo "Compressing $file..."
+                gzip -9 "$file"
+                file="${file}.gz"
+              fi
+            done
+          fi
+          
+          # Clean up temp file
+          rm -f keep_files.txt
+          cd ../..
+          
+          echo "✅ Data retention policy applied"
+      
+      - name: Compress large files
+        run: |
+          echo "📦 Compressing large data files..."
+          find data/features -name "*.csv" -size +10M -exec gzip -9 {} \;
+          echo "✅ Compression complete"
+      
+      - name: Commit data updates
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -74,19 +124,32 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           lfs: true
-      - run: git lfs install
+      
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
+      
+      - name: Install dependencies
+        run: |
           pip install --upgrade pip
           pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
-      - run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-      - run: python pipelines/inference_pipeline.py
+      
+      - name: Set Python path
+        run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
+      - name: Run inference
+        run: python pipelines/inference_pipeline.py
         env:
           AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-      - run: |
+      
+      - name: Commit predictions
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -104,17 +167,32 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           lfs: true
-      - run: git lfs install
+      
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
+      
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: |
+      
+      - name: Install dependencies
+        run: |
           pip install --upgrade pip
           pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
-      - run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-      - run: python model_training/train_model.py
-      - run: python explainability/shap_explain.py
-      - run: |
+      
+      - name: Set Python path
+        run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      
+      - name: Train models
+        run: python model_training/train_model.py
+      
+      - name: Generate SHAP explanations
+        run: python explainability/shap_explain.py
+      
+      - name: Commit model updates
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -163,3 +241,4 @@ jobs:
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Dashboard Deploy: ${{ needs.deploy-dashboard.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Timestamp: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          
