@@ -1,55 +1,55 @@
 {
-  "last_updated": "2025-08-09T15:16:14.422502Z",
+  "last_updated": "2025-08-09T16:19:29.429817Z",
   "files": [
     {
       "path": "data/raw/aqi_data_live_20250802_1338.csv",
       "size_bytes": 89,
-      "modified": "2025-08-09T15:15:59.026190Z"
+      "modified": "2025-08-09T16:19:15.933517Z"
     },
     {
       "path": "data/raw/weather_data_live.csv",
-      "size_bytes": 1614,
-      "modified": "2025-08-09T15:16:13.573962Z"
+      "size_bytes": 1660,
+      "modified": "2025-08-09T16:19:28.601530Z"
     },
     {
       "path": "data/raw/weather_data_live_20250802_1338.csv",
       "size_bytes": 96,
-      "modified": "2025-08-09T15:15:59.128191Z"
+      "modified": "2025-08-09T16:19:16.035517Z"
     },
     {
       "path": "data/raw/aqi_data_backfill_20240701.csv",
-      "size_bytes": 21511037,
-      "modified": "2025-08-09T15:16:12.434951Z"
+      "size_bytes": 22255078,
+      "modified": "2025-08-09T16:19:27.551528Z"
     },
     {
       "path": "data/raw/weather_data_backfill_20240701.csv",
-      "size_bytes": 26308165,
-      "modified": "2025-08-09T15:16:12.574952Z"
+      "size_bytes": 27218059,
+      "modified": "2025-08-09T16:19:27.690528Z"
     },
     {
       "path": "data/raw/weather_data_live_20250802_1334.csv",
       "size_bytes": 99,
-      "modified": "2025-08-09T15:15:59.128191Z"
+      "modified": "2025-08-09T16:19:16.035517Z"
     },
     {
       "path": "data/raw/weather_data_live_20250802_1331.csv",
       "size_bytes": 99,
-      "modified": "2025-08-09T15:15:59.128191Z"
+      "modified": "2025-08-09T16:19:16.035517Z"
     },
     {
       "path": "data/raw/aqi_data_live.csv",
-      "size_bytes": 1737,
-      "modified": "2025-08-09T15:16:13.320960Z"
+      "size_bytes": 1787,
+      "modified": "2025-08-09T16:19:28.531530Z"
     },
     {
       "path": "data/raw/aqi_data_live_20250802_1334.csv",
       "size_bytes": 89,
-      "modified": "2025-08-09T15:15:59.026190Z"
+      "modified": "2025-08-09T16:19:15.933517Z"
     },
     {
       "path": "data/raw/aqi_data_live_20250802_1331.csv",
       "size_bytes": 89,
-      "modified": "2025-08-09T15:15:59.026190Z"
+      "modified": "2025-08-09T16:19:15.933517Z"
     }
   ]
 }
