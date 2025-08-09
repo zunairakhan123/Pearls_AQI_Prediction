@@ -10,6 +10,9 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+concurrency:
+  group: aqi-pipeline-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHON_VERSION: '3.9'
@@ -241,4 +244,5 @@ jobs:
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Dashboard Deploy: ${{ needs.deploy-dashboard.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Timestamp: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+
           
