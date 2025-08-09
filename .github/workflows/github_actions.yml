@@ -1,19 +1,18 @@
-name: Data Fetching Only
+name: Data Collection Only
 
 on:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: '0 */1 * * *'  # Every hour
+    - cron: '0 0 * * *'    # Daily backup at midnight
   workflow_dispatch:
   push:
-    branches: [main, develop]
-  pull_request:
     branches: [main, develop]
 
 env:
   PYTHON_VERSION: '3.9'
 
 jobs:
-  data-fetching:
+  collect-raw-data:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,75 +21,133 @@ jobs:
           fetch-depth: 0
           lfs: false
       
-      # - name: Setup Git LFS
-      #   run: |
-      #     git lfs install
-      #     git lfs pull || echo "⚠️ LFS pull had issues, continuing..."
-      
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       
-      - name: Install dependencies
+      - name: Install minimal dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly
+          pip install requests pandas numpy python-dotenv
       
       - name: Set Python path
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
       
-      - name: Fetch new data
-        run: python data_fetching/fetch_aqi_data.py
+      - name: Fetch AQI data
+        run: |
+          echo "🌍 Fetching AQI data..."
+          python data_fetching/fetch_aqi_data.py
         env:
           AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
+        continue-on-error: true
+      
+      - name: Fetch weather data
+        run: |
+          echo "🌤️ Fetching weather data..."
+          python data_fetching/fetch_weather_data.py
+        env:
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+        continue-on-error: true
       
-      - name: Compute features
-        run: python feature_engineering/compute_features.py
-      
-      - name: Implement data retention policy
+      - name: Validate collected data
         run: |
-          echo "🗂️ Implementing data retention policy..."
-          cd data/features
+          echo "✅ Validating collected data..."
+          python -c "
+          import pandas as pd
+          import os
+          from datetime import datetime
           
-          # List all feature files by date (newest first), keep only last 3
-          ls -t features_*.csv* 2>/dev/null | head -3 > keep_files.txt || touch keep_files.txt
+          # Check if data files exist and have content
+          data_files = []
+          for root, dirs, files in os.walk('data/raw'):
+              for file in files:
+                  if file.endswith('.csv'):
+                      filepath = os.path.join(root, file)
+                      try:
+                          df = pd.read_csv(filepath)
+                          data_files.append({
+                              'file': filepath,
+                              'rows': len(df),
+                              'size_mb': os.path.getsize(filepath) / 1024 / 1024
+                          })
+                      except Exception as e:
+                          print(f'❌ Error reading {filepath}: {e}')
           
-          # Remove old files from LFS tracking if more than 3 exist
-          file_count=$(ls -1 features_*.csv* 2>/dev/null | wc -l || echo "0")
-          if [ "$file_count" -gt 3 ]; then
-            echo "Found $file_count feature files, cleaning up older ones..."
-            
-            for file in $(ls -t features_*.csv* 2>/dev/null | tail -n +4); do
-              echo "Removing $file from LFS tracking..."
-              git lfs untrack "data/features/$file" || true
-              
-              # Compress if not already compressed and larger than 10MB
-              if [[ "$file" != *.gz ]] && [[ $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null) -gt 10485760 ]]; then
-                echo "Compressing $file..."
-                gzip -9 "$file"
-                file="${file}.gz"
-              fi
-            done
-          fi
+          print(f'📊 Collected data summary:')
+          for info in data_files:
+              print(f\"  - {info['file']}: {info['rows']} rows, {info['size_mb']:.2f} MB\")
           
-          # Clean up temp file
-          rm -f keep_files.txt
+          if not data_files:
+              print('⚠️ No data files found')
+              exit(1)
+          "
+      
+      - name: Implement data retention
+        run: |
+          echo "🗂️ Managing data retention..."
+          cd data/raw
+          
+          # Keep only last 30 days of raw data files
+          find . -name "*.csv" -type f -mtime +30 -exec rm -f {} \; || true
+          
+          # Compress files older than 7 days
+          find . -name "*.csv" -type f -mtime +7 ! -name "*.gz" -exec gzip {} \; || true
+          
+          echo "✅ Data retention applied"
           cd ../..
-          
-          echo "✅ Data retention policy applied"
       
-      - name: Compress large files
+      - name: Create data manifest
         run: |
-          echo "📦 Compressing large data files..."
-          find data/features -name "*.csv" -size +10M -exec gzip -9 {} \;
-          echo "✅ Compression complete"
+          echo "📋 Creating data manifest..."
+          python -c "
+          import os
+          import json
+          from datetime import datetime
+          
+          manifest = {
+              'last_updated': datetime.utcnow().isoformat() + 'Z',
+              'files': []
+          }
+          
+          for root, dirs, files in os.walk('data/raw'):
+              for file in files:
+                  filepath = os.path.join(root, file)
+                  manifest['files'].append({
+                      'path': filepath,
+                      'size_bytes': os.path.getsize(filepath),
+                      'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat() + 'Z'
+                  })
+          
+          with open('data/data_manifest.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+          
+          print('✅ Data manifest created')
+          "
       
-      - name: Commit data updates
+      - name: Commit raw data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "🔄 Update data: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
-          git pull --rebase origin main || echo "Nothing to rebase"
-          git push origin main || echo "Push failed"
+          
+          # Only add data files and manifest
+          git add data/raw/ data/data_manifest.json
+          
+          if git diff --staged --quiet; then
+            echo "📝 No new data to commit"
+          else
+            git commit -m "📊 Collect data: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin main || echo "Nothing to rebase"
+            git push origin main || echo "Push failed, will retry next run"
+            echo "✅ Raw data committed successfully"
+          fi
+      
+      - name: Generate collection summary
+        run: |
+          echo "## 📊 Data Collection Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Collection completed" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next Steps**: Run local processing pipeline" >> $GITHUB_STEP_SUMMARY
+          
+          # Count files collected
+          file_count=$(find data/raw -name "*.csv*" -type f | wc -l)
+          echo "- **Files Collected**: $file_count CSV files" >> $GITHUB_STEP_SUMMARY
