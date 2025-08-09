@@ -1,0 +1,55 @@
+{
+  "last_updated": "2025-08-09T07:47:34.574628Z",
+  "files": [
+    {
+      "path": "data/raw/aqi_data_live_20250802_1338.csv",
+      "size_bytes": 89,
+      "modified": "2025-08-09T07:47:22.806972Z"
+    },
+    {
+      "path": "data/raw/weather_data_live.csv",
+      "size_bytes": 1246,
+      "modified": "2025-08-09T07:47:33.842927Z"
+    },
+    {
+      "path": "data/raw/weather_data_live_20250802_1338.csv",
+      "size_bytes": 96,
+      "modified": "2025-08-09T07:47:22.876972Z"
+    },
+    {
+      "path": "data/raw/aqi_data_backfill_20240701.csv",
+      "size_bytes": 15561331,
+      "modified": "2025-08-09T07:47:32.824929Z"
+    },
+    {
+      "path": "data/raw/weather_data_backfill_20240701.csv",
+      "size_bytes": 19031273,
+      "modified": "2025-08-09T07:47:32.961929Z"
+    },
+    {
+      "path": "data/raw/weather_data_live_20250802_1334.csv",
+      "size_bytes": 99,
+      "modified": "2025-08-09T07:47:22.876972Z"
+    },
+    {
+      "path": "data/raw/weather_data_live_20250802_1331.csv",
+      "size_bytes": 99,
+      "modified": "2025-08-09T07:47:22.876972Z"
+    },
+    {
+      "path": "data/raw/aqi_data_live.csv",
+      "size_bytes": 1337,
+      "modified": "2025-08-09T07:47:33.712927Z"
+    },
+    {
+      "path": "data/raw/aqi_data_live_20250802_1334.csv",
+      "size_bytes": 89,
+      "modified": "2025-08-09T07:47:22.806972Z"
+    },
+    {
+      "path": "data/raw/aqi_data_live_20250802_1331.csv",
+      "size_bytes": 89,
+      "modified": "2025-08-09T07:47:22.806972Z"
+    }
+  ]
+}
