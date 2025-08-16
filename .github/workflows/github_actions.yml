@@ -281,7 +281,7 @@ jobs:
 
   inference:
     runs-on: ubuntu-latest
-    needs: [setup, data-fetching]
+    needs: [setup, data-fetching,model-training]
     if: needs.setup.outputs.should-infer != 'false'
     steps:
       - uses: actions/checkout@v4
@@ -394,8 +394,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "$(date -u '+%Y-%m-%d %H:%M UTC')" > predictions/last_prediction.txt
-          git add predictions/last_prediction.txt || echo "No prediction metadata to add"
+          echo "$(date -u '+%Y-%m-%d %H:%M UTC')" > data/predictions/last_prediction.txt
+          git add data/predictions/last_prediction.txt || echo "No prediction metadata to add"
           git commit -m "🔮 Update prediction metadata: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
           git pull --rebase origin main || echo "Nothing to rebase"
           git push origin main || echo "Push failed"
@@ -542,7 +542,7 @@ jobs:
 
   notify:
     runs-on: ubuntu-latest
-    needs: [data-fetching, inference, model-training, deploy-streamlit]
+    needs: [data-fetching, model-training, inference, deploy-streamlit]
     if: always()
     steps:
       - run: |
