@@ -1,0 +1,2 @@
+timestamp,predicted_aqi_24h,predicted_aqi_48h,predicted_aqi_72h,predicted_aqi_3day_avg,model_used,model_timestamp,current_aqi
+2025-08-16 12:05:15.530847,188.3982696533203,174.0133056640625,235.98007202148438,199.4638671875,XGBoost_MultiOutput,20250816_1124,263.0

@@ -1,0 +1,2 @@
+timestamp,predicted_aqi_24h,predicted_aqi_48h,predicted_aqi_72h,predicted_aqi_3day_avg,model_used,model_timestamp,current_aqi
+2025-08-16 17:46:24.517765,168.9550021988573,181.05171353609404,173.5194538916558,174.50872320886904,RandomForest_MultiOutput,20250816_1638,291.0

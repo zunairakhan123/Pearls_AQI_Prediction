@@ -1,436 +1,4 @@
-
-# import streamlit as st
-# import pandas as pd
-# import numpy as np
-# import plotly.graph_objects as go
-# import plotly.express as px
-# from datetime import datetime, timedelta
-# import os
-# import shap
-# import matplotlib.pyplot as plt
-# import sys
-# sys.path.append('..')
-
-# # Try to import SHAP
-# try:
-#     import shap
-#     SHAP_AVAILABLE = True
-# except ImportError:
-#     SHAP_AVAILABLE = False
-#     st.warning("SHAP not available. Install with: pip install shap")
-
-# from model_training.model_registry import ModelRegistry
-# from pipelines.inference_pipeline import InferencePipeline
-
-# # Page configuration
-# st.set_page_config(
-#     page_title="Lahore AQI Predictor",
-#     page_icon="🌫️",
-#     layout="wide",
-#     initial_sidebar_state="expanded"
-# )
-
-# # Custom CSS
-# st.markdown("""
-# <style>
-#     .main-header {
-#         font-size: 2.5rem;
-#         font-weight: bold;
-#         color: #1f77b4;
-#         text-align: center;
-#         margin-bottom: 2rem;
-#     }
-#     .metric-card {
-#         background-color: #f0f2f6;
-#         padding: 1rem;
-#         border-radius: 0.5rem;
-#         border-left: 4px solid #1f77b4;
-#     }
-#     .alert-high {
-#         background-color: #ffebee;
-#         color: #c62828;
-#         padding: 1rem;
-#         border-radius: 0.5rem;
-#         border-left: 4px solid #c62828;
-#     }
-#     .alert-moderate {
-#         background-color: #fff3e0;
-#         color: #ef6c00;
-#         padding: 1rem;
-#         border-radius: 0.5rem;
-#         border-left: 4px solid #ef6c00;
-#     }
-# </style>
-# """, unsafe_allow_html=True)
-
-# class AQIDashboard:
-#     def __init__(self):
-#         self.model_registry = ModelRegistry()
-#         self.inference_pipeline = InferencePipeline()
-        
-#     def load_latest_predictions(self):
-#         """Load latest predictions"""
-#         predictions_file = "data/predictions/latest_predictions.csv"
-#         if os.path.exists(predictions_file):
-#             return pd.read_csv(predictions_file)
-#         return pd.DataFrame()
-    
-#     def load_alerts(self):
-#         """Load AQI alerts"""
-#         alerts_file = "data/predictions/aqi_alerts.csv"
-#         if os.path.exists(alerts_file):
-#             return pd.read_csv(alerts_file)
-#         return pd.DataFrame()
-    
-#     def load_historical_data(self):
-#         """Load historical AQI data for visualization"""
-#         import glob
-        
-#         # Try to load the most recent raw data
-#         aqi_files = glob.glob("data/raw/aqi_data_*.csv")
-#         if aqi_files:
-#             latest_file = max(aqi_files, key=os.path.getmtime)
-#             return pd.read_csv(latest_file)
-#         return pd.DataFrame()
-    
-#     def get_aqi_color(self, aqi_value):
-#         """Get color based on AQI value"""
-#         if aqi_value <= 50:
-#             return "#00e400"  # Good - Green
-#         elif aqi_value <= 100:
-#             return "#ffff00"  # Moderate - Yellow
-#         elif aqi_value <= 150:
-#             return "#ff7e00"  # Unhealthy for Sensitive - Orange
-#         elif aqi_value <= 200:
-#             return "#ff0000"  # Unhealthy - Red
-#         elif aqi_value <= 300:
-#             return "#8f3f97"  # Very Unhealthy - Purple
-#         else:
-#             return "#7e0023"  # Hazardous - Maroon
-    
-#     def get_aqi_category(self, aqi_value):
-#         """Get AQI category name"""
-#         if aqi_value <= 50:
-#             return "Good"
-#         elif aqi_value <= 100:
-#             return "Moderate"
-#         elif aqi_value <= 150:
-#             return "Unhealthy for Sensitive Groups"
-#         elif aqi_value <= 200:
-#             return "Unhealthy"
-#         elif aqi_value <= 300:
-#             return "Very Unhealthy"
-#         else:
-#             return "Hazardous"
-    
-#     def create_aqi_gauge(self, current_aqi, predicted_aqi):
-#         """Create AQI gauge chart"""
-#         fig = go.Figure()
-        
-#         # Add current AQI gauge
-#         fig.add_trace(go.Indicator(
-#             mode = "gauge+number+delta",
-#             value = current_aqi,
-#             domain = {'x': [0, 0.5], 'y': [0, 1]},
-#             title = {'text': "Current AQI"},
-#             delta = {'reference': predicted_aqi},
-#             gauge = {
-#                 'axis': {'range': [None, 500]},
-#                 'bar': {'color': self.get_aqi_color(current_aqi)},
-#                 'steps': [
-#                     {'range': [0, 50], 'color': "lightgray"},
-#                     {'range': [50, 100], 'color': "gray"},
-#                     {'range': [100, 150], 'color': "lightgray"},
-#                     {'range': [150, 200], 'color': "gray"},
-#                     {'range': [200, 300], 'color': "lightgray"},
-#                     {'range': [300, 500], 'color': "gray"}
-#                 ],
-#                 'threshold': {
-#                     'line': {'color': "red", 'width': 4},
-#                     'thickness': 0.75,
-#                     'value': 200
-#                 }
-#             }
-#         ))
-        
-#         # Add predicted AQI gauge
-#         fig.add_trace(go.Indicator(
-#             mode = "gauge+number",
-#             value = predicted_aqi,
-#             domain = {'x': [0.5, 1], 'y': [0, 1]},
-#             title = {'text': "Predicted AQI (3-day avg)"},
-#             gauge = {
-#                 'axis': {'range': [None, 500]},
-#                 'bar': {'color': self.get_aqi_color(predicted_aqi)},
-#                 'steps': [
-#                     {'range': [0, 50], 'color': "lightgray"},
-#                     {'range': [50, 100], 'color': "gray"},
-#                     {'range': [100, 150], 'color': "lightgray"},
-#                     {'range': [150, 200], 'color': "gray"},
-#                     {'range': [200, 300], 'color': "lightgray"},
-#                     {'range': [300, 500], 'color': "gray"}
-#                 ],
-#                 'threshold': {
-#                     'line': {'color': "red", 'width': 4},
-#                     'thickness': 0.75,
-#                     'value': 200
-#                 }
-#             }
-#         ))
-        
-#         fig.update_layout(height=400)
-#         return fig
-    
-#     def create_trend_chart(self, historical_data):
-#         """Create AQI trend chart"""
-#         if historical_data.empty:
-#             return None
-            
-#         # Convert timestamp to datetime
-#         historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'])
-        
-#         # Create the trend chart
-#         fig = go.Figure()
-        
-#         fig.add_trace(go.Scatter(
-#             x=historical_data['timestamp'],
-#             y=historical_data['aqi'],
-#             mode='lines+markers',
-#             name='AQI',
-#             line=dict(color='blue', width=2),
-#             marker=dict(size=4)
-#         ))
-        
-#         # Add AQI category bands
-#         fig.add_hrect(y0=0, y1=50, fillcolor="green", opacity=0.1, annotation_text="Good", annotation_position="left")
-#         fig.add_hrect(y0=50, y1=100, fillcolor="yellow", opacity=0.1, annotation_text="Moderate", annotation_position="left")
-#         fig.add_hrect(y0=100, y1=150, fillcolor="orange", opacity=0.1, annotation_text="Unhealthy for Sensitive", annotation_position="left")
-#         fig.add_hrect(y0=150, y1=200, fillcolor="red", opacity=0.1, annotation_text="Unhealthy", annotation_position="left")
-#         fig.add_hrect(y0=200, y1=300, fillcolor="purple", opacity=0.1, annotation_text="Very Unhealthy", annotation_position="left")
-#         fig.add_hrect(y0=300, y1=500, fillcolor="maroon", opacity=0.1, annotation_text="Hazardous", annotation_position="left")
-        
-#         fig.update_layout(
-#             title="AQI Trend (Last 7 Days)",
-#             xaxis_title="Time",
-#             yaxis_title="AQI",
-#             height=400,
-#             showlegend=True
-#         )
-        
-#         return fig
-    
-#     def run_dashboard(self):
-#         """Main dashboard function"""
-#         # Header
-#         st.markdown('<div class="main-header">🌫️ Lahore AQI Predictor Dashboard</div>', unsafe_allow_html=True)
-        
-#         # Sidebar
-#         st.sidebar.header("🔧 Controls")
-        
-#         # Run inference button
-#         if st.sidebar.button("🔄 Update Predictions", type="primary"):
-#             with st.spinner("Running inference pipeline..."):
-#                 result = self.inference_pipeline.run_inference_pipeline()
-#                 if result:
-#                     st.sidebar.success("Predictions updated!")
-#                 else:
-#                     st.sidebar.error("Failed to update predictions")
-        
-#         # Auto-refresh option
-#         auto_refresh = st.sidebar.checkbox("🔄 Auto-refresh (every 5 minutes)")
-#         if auto_refresh:
-#             st.rerun()
-        
-#         # Load data
-#         predictions_df = self.load_latest_predictions()
-#         alerts_df = self.load_alerts()
-#         historical_data = self.load_historical_data()
-        
-#         if predictions_df.empty:
-#             st.warning("No predictions available. Please run the inference pipeline first.")
-#             if st.button("Run Inference Pipeline"):
-#                 with st.spinner("Running inference pipeline..."):
-#                     result = self.inference_pipeline.run_inference_pipeline()
-#                     if result:
-#                         st.success("Predictions generated!")
-#                         st.rerun()
-#             return
-        
-#         # Get latest prediction
-#         latest_prediction = predictions_df.iloc[-1]
-#         current_aqi = latest_prediction.get('current_aqi', 150)  # Default if not available
-#         predicted_aqi = latest_prediction['predicted_aqi_3day_avg']
-        
-#         # Main metrics
-#         col1, col2, col3, col4 = st.columns(4)
-        
-#         with col1:
-#             st.metric(
-#                 label="Current AQI",
-#                 value=f"{current_aqi:.0f}",
-#                 delta=f"{self.get_aqi_category(current_aqi)}"
-#             )
-        
-#         with col2:
-#             st.metric(
-#                 label="Predicted AQI (3-day)",
-#                 value=f"{predicted_aqi:.0f}",
-#                 delta=f"{predicted_aqi - current_aqi:+.0f}"
-#             )
-        
-#         with col3:
-#             if 'predicted_aqi_24h' in latest_prediction:
-#                 st.metric(
-#                     label="24-hour Prediction",
-#                     value=f"{latest_prediction['predicted_aqi_24h']:.0f}",
-#                     delta=f"{self.get_aqi_category(latest_prediction['predicted_aqi_24h'])}"
-#                 )
-        
-#         with col4:
-#             model_used = latest_prediction.get('model_used', 'Unknown')
-#             st.metric(
-#                 label="Model Used",
-#                 value=model_used
-#             )
-        
-#         # Alerts section
-#         if not alerts_df.empty:
-#             st.subheader("🚨 Current Alerts")
-#             latest_alerts = alerts_df.tail(3)
-            
-#             for _, alert in latest_alerts.iterrows():
-#                 if alert['level'] == 'HAZARDOUS':
-#                     st.error(f"🚨 {alert['message']} - {alert['recommendation']}")
-#                 elif alert['level'] in ['UNHEALTHY', 'CHANGE_ALERT']:
-#                     st.warning(f"⚠️ {alert['message']} - {alert['recommendation']}")
-#                 else:
-#                     st.info(f"ℹ️ {alert['message']} - {alert['recommendation']}")
-        
-#         # Gauge charts
-#         st.subheader("📊 AQI Overview")
-#         gauge_fig = self.create_aqi_gauge(current_aqi, predicted_aqi)
-#         st.plotly_chart(gauge_fig, use_container_width=True)
-        
-#         # Trend chart
-#         if not historical_data.empty:
-#             st.subheader("📈 AQI Trend")
-#             trend_fig = self.create_trend_chart(historical_data.tail(168))  # Last 7 days (hourly data)
-#             if trend_fig:
-#                 st.plotly_chart(trend_fig, use_container_width=True)
-        
-#         # Predictions history
-#         st.subheader("🔮 Recent Predictions")
-#         if len(predictions_df) > 1:
-#             recent_predictions = predictions_df.tail(10)
-#             recent_predictions['timestamp'] = pd.to_datetime(recent_predictions['timestamp'])
-            
-#             chart_data = recent_predictions[['timestamp', 'predicted_aqi_3day_avg']].copy()
-#             chart_data = chart_data.set_index('timestamp')
-            
-#             st.line_chart(chart_data)
-        
-#         # Model performance
-#         st.subheader("🤖 Model Information")
-#         models_df = self.model_registry.list_all_models()
-        
-#         if not models_df.empty:
-#             col1, col2 = st.columns(2)
-            
-#             with col1:
-#                 st.write("**Available Models:**")
-#                 model_summary = models_df[['model_name', 'test_rmse', 'test_r2', 'created_at']].copy()
-#                 model_summary = model_summary.sort_values('test_rmse')
-#                 st.dataframe(model_summary)
-            
-#             with col2:
-#                 st.write("**Model Performance Comparison:**")
-#                 fig = px.bar(
-#                     models_df, 
-#                     x='model_name', 
-#                     y='test_rmse',
-#                     title="Model RMSE Comparison",
-#                     color='test_rmse',
-#                     color_continuous_scale='viridis_r'
-#                 )
-#                 st.plotly_chart(fig, use_container_width=True)
-        
-#         # Feature importance (if SHAP is available)
-#         if SHAP_AVAILABLE:
-#             self.show_feature_importance()
-        
-#         # Data quality metrics
-#         st.subheader("📋 Data Quality")
-#         col1, col2, col3 = st.columns(3)
-        
-#         with col1:
-#             if not historical_data.empty:
-#                 data_completeness = (1 - historical_data.isnull().sum().sum() / historical_data.size) * 100
-#                 st.metric("Data Completeness", f"{data_completeness:.1f}%")
-        
-#         with col2:
-#             if not predictions_df.empty:
-#                 last_update = pd.to_datetime(predictions_df['timestamp'].iloc[-1])
-#                 hours_since_update = (datetime.now() - last_update).total_seconds() / 3600
-#                 st.metric("Hours Since Last Update", f"{hours_since_update:.1f}")
-        
-#         with col3:
-#             total_predictions = len(predictions_df)
-#             st.metric("Total Predictions Made", total_predictions)
-    
-#     def show_feature_importance(self):
-#         """Show SHAP feature importance if available"""
-#         st.subheader("🎯 Feature Importance (SHAP)")
-        
-#         try:
-#             # Load the best model
-#             model, scaler, model_info = self.model_registry.get_best_model()
-            
-#             if model is None:
-#                 st.write("No trained model available for SHAP analysis.")
-#                 return
-            
-#             # Load latest features for SHAP analysis
-#             from feature_store.feature_store_manager import FeatureStore
-#             fs = FeatureStore()
-#             features_df = fs.load_features_from_csv(latest=True)
-            
-#             if features_df is None or features_df.empty:
-#                 st.write("No feature data available for SHAP analysis.")
-#                 return
-            
-#             # Prepare features (same as training)
-#             feature_columns = model_info['feature_columns'].split(',')
-#             X = features_df[feature_columns].select_dtypes(include=[np.number])
-#             X = X.fillna(X.mean())
-            
-#             # Take a sample for SHAP (to speed up computation)
-#             sample_size = min(100, len(X))
-#             X_sample = X.sample(sample_size, random_state=42)
-            
-#             # Scale if needed
-#             if scaler is not None:
-#                 X_sample = pd.DataFrame(scaler.transform(X_sample), columns=X_sample.columns)
-            
-#             # Create SHAP explainer
-#             if model_info['model_name'] == 'RandomForest':
-#                 explainer = shap.TreeExplainer(model)
-#                 shap_values = explainer.shap_values(X_sample)
-#             else:
-#                 explainer = shap.KernelExplainer(model.predict, X_sample[:10])  # Use small background set
-#                 shap_values = explainer.shap_values(X_sample[:20])  # Explain subset
-            
-#             # Create SHAP summary plot
-#             fig_shap = plt.figure(figsize=(10, 6))
-#             shap.summary_plot(shap_values, X_sample, show=False)
-#             st.pyplot(fig_shap)
-            
-#         except Exception as e:
-#             st.write(f"SHAP analysis unavailable: {e}")
-
-# # Run the dashboard
-# if __name__ == "__main__":
-#     dashboard = AQIDashboard()
-#     dashboard.run_dashboard()
+#app.py
 
 import streamlit as st
 import pandas as pd
@@ -717,8 +285,21 @@ class AQIDashboard:
         if historical_data.empty:
             return None
             
-        # Convert timestamp to datetime
-        historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'])
+        # Convert timestamp to datetime with flexible parsing
+        try:
+            # Try ISO8601 format first (handles timezone info)
+            historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'], format='ISO8601')
+        except (ValueError, TypeError):
+            try:
+                # Fallback to mixed format parsing
+                historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'], format='mixed')
+            except (ValueError, TypeError):
+                try:
+                    # Final fallback - let pandas infer the format
+                    historical_data['timestamp'] = pd.to_datetime(historical_data['timestamp'], infer_datetime_format=True)
+                except (ValueError, TypeError) as e:
+                    st.error(f"Unable to parse timestamp data: {e}")
+                    return None
         
         # Create the trend chart
         fig = go.Figure()
@@ -796,9 +377,9 @@ class AQIDashboard:
                     st.sidebar.error("Failed to update predictions")
         
         # Auto-refresh option
-        auto_refresh = st.sidebar.checkbox("🔄 Auto-refresh (every 5 minutes)")
-        if auto_refresh:
-            st.rerun()
+        # auto_refresh = st.sidebar.checkbox("🔄 Auto-refresh (every 5 minutes)")
+        # if auto_refresh:
+        #     st.rerun()
         
         # Load data
         predictions_df = self.load_latest_predictions()
@@ -891,14 +472,41 @@ class AQIDashboard:
         st.subheader("🔮 Recent Predictions Comparison")
         if len(predictions_df) > 1:
             recent_predictions = predictions_df.tail(10)
-            recent_predictions['timestamp'] = pd.to_datetime(recent_predictions['timestamp'])
+            
+            # Convert timestamp with flexible parsing
+            try:
+                # Try ISO8601 format first
+                recent_predictions['timestamp'] = pd.to_datetime(recent_predictions['timestamp'], format='ISO8601')
+            except (ValueError, TypeError):
+                try:
+                    # Fallback to mixed format parsing
+                    recent_predictions['timestamp'] = pd.to_datetime(recent_predictions['timestamp'], format='mixed')
+                except (ValueError, TypeError):
+                    try:
+                        # Final fallback
+                        recent_predictions['timestamp'] = pd.to_datetime(recent_predictions['timestamp'], infer_datetime_format=True)
+                    except (ValueError, TypeError) as e:
+                        st.warning(f"Unable to parse prediction timestamps: {e}")
+                        # Use index as x-axis instead
+                        recent_predictions = recent_predictions.reset_index()
+                        x_axis = recent_predictions.index
+                        x_title = "Prediction Index"
+                    else:
+                        x_axis = recent_predictions['timestamp']
+                        x_title = "Time"
+                else:
+                    x_axis = recent_predictions['timestamp']
+                    x_title = "Time"
+            else:
+                x_axis = recent_predictions['timestamp']
+                x_title = "Time"
             
             # Multi-line chart for different predictions
             fig = go.Figure()
             
             if 'predicted_aqi_24h' in recent_predictions.columns:
                 fig.add_trace(go.Scatter(
-                    x=recent_predictions['timestamp'],
+                    x=x_axis,
                     y=recent_predictions['predicted_aqi_24h'],
                     mode='lines+markers',
                     name='24h Predictions',
@@ -907,7 +515,7 @@ class AQIDashboard:
             
             if 'predicted_aqi_48h' in recent_predictions.columns:
                 fig.add_trace(go.Scatter(
-                    x=recent_predictions['timestamp'],
+                    x=x_axis,
                     y=recent_predictions['predicted_aqi_48h'],
                     mode='lines+markers',
                     name='48h Predictions',
@@ -916,7 +524,7 @@ class AQIDashboard:
             
             if 'predicted_aqi_72h' in recent_predictions.columns:
                 fig.add_trace(go.Scatter(
-                    x=recent_predictions['timestamp'],
+                    x=x_axis,
                     y=recent_predictions['predicted_aqi_72h'],
                     mode='lines+markers',
                     name='72h Predictions',
@@ -924,7 +532,7 @@ class AQIDashboard:
                 ))
             
             fig.add_trace(go.Scatter(
-                x=recent_predictions['timestamp'],
+                x=x_axis,
                 y=recent_predictions['predicted_aqi_3day_avg'],
                 mode='lines+markers',
                 name='3-Day Average',
@@ -933,7 +541,7 @@ class AQIDashboard:
             
             fig.update_layout(
                 title="Recent Predictions History",
-                xaxis_title="Time",
+                xaxis_title=x_title,
                 yaxis_title="AQI",
                 height=400
             )

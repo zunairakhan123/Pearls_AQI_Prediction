@@ -1,3 +1,5 @@
+#feature_engineering(compute_feature.py)
+
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -26,12 +28,19 @@ class FeatureEngineer:
         return aqi_data, weather_data
     
     def create_time_features(self, df):
-        df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed')
+        # FIXED: Added utc=True to handle mixed timezones
+        df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', utc=True)
+        
+        # Convert to local timezone if needed (optional)
+        # df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Karachi')
+        
         df['hour'] = df['timestamp'].dt.hour
         df['day'] = df['timestamp'].dt.day
         df['month'] = df['timestamp'].dt.month
         df['day_of_week'] = df['timestamp'].dt.dayofweek
         df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
+        # Add season feature
+        df['season'] = ((df['month'] % 12 + 3) // 3).map({1: 'Winter', 2: 'Spring', 3: 'Summer', 4: 'Fall'})
         return df
     
     def create_lag_features(self, df, columns, lags=[1, 6, 12, 24]):
@@ -56,10 +65,22 @@ class FeatureEngineer:
             df['aqi_change_rate'] = df['aqi'].pct_change()
             df['aqi_category'] = pd.cut(df['aqi'], bins=[0, 50, 100, 150, 200, 300, float('inf')],
                                         labels=[0, 1, 2, 3, 4, 5])
+        
+        # Better heat index calculation
         if 'temperature' in df.columns and 'humidity' in df.columns:
-            df['heat_index'] = df['temperature'] + 0.5 * df['humidity']
+            # More accurate heat index approximation
+            T = df['temperature']
+            H = df['humidity']
+            df['heat_index'] = T + (0.5 * (H - 10)) / 10
+            df['comfort_index'] = T - 0.4 * (T - 10) * (1 - H/100)
+        
         if 'pm25' in df.columns and 'pm10' in df.columns:
             df['pm_ratio'] = df['pm25'] / (df['pm10'] + 1e-6)
+            
+        # Wind chill factor
+        if 'temperature' in df.columns and 'wind_speed' in df.columns:
+            df['wind_chill'] = df['temperature'] - (df['wind_speed'] * 0.7)
+            
         return df
     
     def create_target_variables(self, df):
@@ -72,15 +93,53 @@ class FeatureEngineer:
         return df_sorted
     
     def merge_aqi_weather_data(self, aqi_data, weather_data):
-        aqi_data['timestamp'] = pd.to_datetime(aqi_data['timestamp'], format='mixed')
-        weather_data['timestamp'] = pd.to_datetime(weather_data['timestamp'], format='mixed')
+        # FIXED: Added utc=True to handle mixed timezones
+        aqi_data['timestamp'] = pd.to_datetime(aqi_data['timestamp'], format='mixed', utc=True)
+        weather_data['timestamp'] = pd.to_datetime(weather_data['timestamp'], format='mixed', utc=True)
+        
         aqi_data['timestamp_rounded'] = aqi_data['timestamp'].dt.round('H')
         weather_data['timestamp_rounded'] = weather_data['timestamp'].dt.round('H')
         merged_data = pd.merge(aqi_data, weather_data, left_on='timestamp_rounded', right_on='timestamp_rounded',
                                how='inner', suffixes=('', '_weather'))
         merged_data['timestamp'] = merged_data['timestamp']
         merged_data = merged_data.drop(['timestamp_rounded', 'timestamp_weather'], axis=1)
+        
+        # Remove duplicates after merging
+        merged_data = merged_data.drop_duplicates(subset=['timestamp']).reset_index(drop=True)
+        
         return merged_data
+    
+    def handle_nulls_and_outliers(self, df):
+        """Handle null values and outliers"""
+        print("Handling null values and outliers...")
+        
+        # Remove columns that are completely null
+        df = df.dropna(axis=1, how='all')
+        
+        # Remove columns with more than 80% nulls
+        null_threshold = len(df) * 0.8
+        df = df.dropna(axis=1, thresh=null_threshold)
+        
+        # Handle outliers in key columns
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if col in ['aqi', 'pm25', 'pm10']:  # AQI related columns
+                # Remove extreme outliers (beyond 99.9 percentile)
+                upper_limit = df[col].quantile(0.999)
+                df = df[df[col] <= upper_limit]
+            elif col in ['temperature', 'humidity', 'pressure', 'wind_speed']:  # Weather columns
+                # Remove values outside reasonable ranges
+                if col == 'temperature':
+                    df = df[(df[col] >= -50) & (df[col] <= 60)]  # Reasonable temp range
+                elif col == 'humidity':
+                    df = df[(df[col] >= 0) & (df[col] <= 100)]  # Valid humidity range
+                elif col == 'pressure':
+                    df = df[(df[col] >= 900) & (df[col] <= 1100)]  # Valid pressure range
+                elif col == 'wind_speed':
+                    df = df[(df[col] >= 0) & (df[col] <= 200)]  # Valid wind speed range
+        
+        print(f"Data shape after outlier removal: {df.shape}")
+        return df
     
     def compute_all_features(self):
         print("Loading raw data...")
@@ -107,18 +166,39 @@ class FeatureEngineer:
         print("Creating derived features...")
         merged_data = self.create_derived_features(merged_data)
 
-        print("One-Hot Encoding aqi_category...")
+        print("One-Hot Encoding categorical features...")
+        # Handle aqi_category
         merged_data['aqi_category'] = merged_data['aqi_category'].astype(str)
         merged_data = pd.get_dummies(merged_data, columns=['aqi_category'], prefix='aqi_category')
         expected_categories = [f'aqi_category_{i}' for i in range(6)]
         for cat in expected_categories:
             if cat not in merged_data.columns:
                 merged_data[cat] = 0
+        
+        # Handle season
+        if 'season' in merged_data.columns:
+            merged_data = pd.get_dummies(merged_data, columns=['season'], prefix='season')
 
         print("Creating target variables...")
         merged_data = self.create_target_variables(merged_data)
         
-        merged_data = merged_data.dropna(subset=['aqi'])
+        # Handle nulls and outliers
+        merged_data = self.handle_nulls_and_outliers(merged_data)
+        
+        # Drop rows where essential columns are null
+        essential_columns = ['aqi']  # Add more if needed
+        merged_data = merged_data.dropna(subset=essential_columns)
+        
+        # FIXED: Replace deprecated fillna method
+        # Old: merged_data = merged_data.fillna(method='ffill').fillna(method='bfill')
+        # New:
+        merged_data = merged_data.ffill().bfill()
+        
+        # Final check - drop any remaining rows with nulls
+        merged_data = merged_data.dropna()
+        
+        print(f"Final data shape after all processing: {merged_data.shape}")
+        print(f"Null values remaining: {merged_data.isnull().sum().sum()}")
         
         if not os.path.exists(self.features_path):
             os.makedirs(self.features_path, exist_ok=True)
@@ -136,3 +216,4 @@ if __name__ == "__main__":
     if features is not None:
         print(f"Feature engineering completed. Shape: {features.shape}")
         print(f"Columns: {list(features.columns)}")
+        print(f"Memory usage: {features.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
