@@ -403,143 +403,50 @@ jobs:
   deploy-streamlit:
     runs-on: ubuntu-latest
     needs: [data-fetching, inference, model-training]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: needs.data-fetching.result == 'success' && needs.inference.result == 'success' && (needs.model-training.result == 'success' || needs.model-training.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install huggingface_hub git-python streamlit
-      
-      - name: Prepare Streamlit app for Hugging Face Spaces
-        run: |
-          python -c "
-          import os
-          from huggingface_hub import HfApi, login
-          
-          # Create Streamlit app structure for Spaces
-          os.makedirs('streamlit_app', exist_ok=True)
-          
-          # Copy dashboard files to streamlit_app directory
-          import shutil
-          if os.path.exists('dashboard/'):
-              shutil.copytree('dashboard/', 'streamlit_app/', dirs_exist_ok=True)
-          
-          # Create requirements.txt for Spaces
-          with open('streamlit_app/requirements.txt', 'w') as f:
-              f.write('streamlit\\npandas\\nnumpy\\nplotly\\nscikit-learn\\nxgboost\\njoblib\\nhuggingface_hub\\nrequests\\nshap\\nmatplotlib')
-          
-          # Skip README.md creation - using existing HF Space README
-          
-          # Update app.py to load models from Hugging Face Hub
-          if os.path.exists('streamlit_app/app.py'):
-              with open('streamlit_app/app.py', 'r') as f:
-                  content = f.read()
-              
-              # Create HF integration code as separate lines to avoid quote issues
-              hf_lines = [
-                  'import os',
-                  'from huggingface_hub import hf_hub_download, login',
-                  'import streamlit as st',
-                  '',
-                  '# Configure Hugging Face',
-                  'HF_REPO = \"${{ secrets.HF_REPO }}\"',
-                  'HF_TOKEN = st.secrets.get(\"HF_TOKEN\", None)',
-                  '',
-                  '@st.cache_data',
-                  'def load_model_from_hf():',
-                  '    \"\"\"Load the best model from Hugging Face Hub\"\"\"',
-                  '    try:',
-                  '        if HF_TOKEN:',
-                  '            login(token=HF_TOKEN)',
-                  '        ',
-                  '        # Download best model',
-                  '        model_path = hf_hub_download(',
-                  '            repo_id=HF_REPO,',
-                  '            filename=\"models/best_model.joblib\",  # You might need to adjust this',
-                  '            local_dir=\"./models\",',
-                  '            local_dir_use_symlinks=False',
-                  '        )',
-                  '        return model_path',
-                  '    except Exception as e:',
-                  '        st.error(f\"Error loading model from HF Hub: {e}\")',
-                  '        return None',
-                  '',
-                  '@st.cache_data',
-                  'def load_latest_data_from_hf():',
-                  '    \"\"\"Load latest predictions from Hugging Face Hub\"\"\"',
-                  '    try:',
-                  '        if HF_TOKEN:',
-                  '            login(token=HF_TOKEN)',
-                  '        ',
-                  '        # You can implement data loading logic here',
-                  '        return None',
-                  '    except Exception as e:',
-                  '        st.warning(f\"Could not load latest data: {e}\")',
-                  '        return None',
-                  ''
-              ]
-              
-              # Join lines and prepend to content
-              hf_integration = '\\n'.join(hf_lines)
-              updated_content = hf_integration + '\\n' + content
-              
-              with open('streamlit_app/app.py', 'w') as f:
-                  f.write(updated_content)
-          
-          print('✅ Streamlit app prepared for Hugging Face Spaces')
-          "
-      
+
       - name: Deploy to Hugging Face Spaces
         run: |
           python -c "
           import os
-          import subprocess
           from huggingface_hub import HfApi, login
-          
+
           try:
               login(token='${{ secrets.HF_TOKEN }}')
               api = HfApi()
-              
+
               space_id = os.environ.get('HF_SPACE')
-              
-              # Create or update the Space
-              try:
-                  # Try to create space (will fail if exists)
-                  api.create_repo(
-                      repo_id=space_id,
-                      repo_type='space',
-                      space_sdk='streamlit',
-                      private=False
-                  )
-                  print(f'✅ Created new Hugging Face Space: {space_id}')
-              except Exception as e:
-                  print(f'ℹ️  Space {space_id} already exists or creation failed: {str(e)}')
-              
-              # Upload all files from streamlit_app directory
-              api.upload_folder(
-                  folder_path='streamlit_app/',
+              app_file = 'app.py'
+              requirements_file = 'requirements.txt'
+
+              # Upload the single app.py file
+              api.upload_file(
+                  path_or_fileobj=app_file,
+                  path_in_repo=app_file,
                   repo_id=space_id,
                   repo_type='space',
                   commit_message='🚀 Deploy updated AQI dashboard'
               )
-              
-              print(f'✅ Successfully deployed to Hugging Face Spaces!')
-              print(f'🌐 Your app is available at: https://huggingface.co/spaces/{space_id}')
-              
+
+              # Upload the requirements.txt file
+              api.upload_file(
+                  path_or_fileobj=requirements_file,
+                  path_in_repo=requirements_file,
+                  repo_id=space_id,
+                  repo_type='space',
+                  commit_message='📦 Update requirements'
+              )
+
+              print(f'✅ Successfully deployed to Hugging Face Spaces: {space_id}')
           except Exception as e:
               print(f'❌ Deployment to HF Spaces failed: {str(e)}')
               exit(1)
           "
-
   notify:
     runs-on: ubuntu-latest
     needs: [data-fetching, model-training, inference, deploy-streamlit]
