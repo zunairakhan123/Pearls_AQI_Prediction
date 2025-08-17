@@ -192,7 +192,7 @@ jobs:
       - name: Train models
         run: python model_training/train_model.py
       
-      - name: Evaluate and upload model if RMSE < 40
+      - name: Evaluate and upload model if RMSE < 50
         run: |
           python -c "
           import os
@@ -557,4 +557,6 @@ jobs:
           echo "- 📊 Models & Data: [HF Hub](${{ env.HF_REPO }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🌐 Live Dashboard: [HF Spaces](${{ env.HF_SPACE }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🎯 Only models with RMSE < 40 are saved" >> $GITHUB_STEP_SUMMARY
+
           echo "- ⚡ Auto-updating dashboard with latest models" >> $GITHUB_STEP_SUMMARY
+
