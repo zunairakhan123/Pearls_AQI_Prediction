@@ -435,7 +435,7 @@ jobs:
           
           # Create requirements.txt for Spaces
           with open('streamlit_app/requirements.txt', 'w') as f:
-              f.write('streamlit\\npandas\\nnumpy\\nplotly\\nscikit-learn\\nxgboost\\njoblib\\nhuggingface_hub\\nrequests')
+              f.write('streamlit\\npandas\\nnumpy\\nplotly\\nscikit-learn\\nxgboost\\njoblib\\nhuggingface_hub\\nrequests\\nshap\\nmatplotlib')
           
           # Skip README.md creation - using existing HF Space README
           
