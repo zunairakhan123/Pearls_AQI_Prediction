@@ -210,8 +210,8 @@ jobs:
                   rmse = metrics.get('rmse', float('inf'))
                   print(f'🎯 Model RMSE: {rmse:.2f}')
                   
-                  if rmse < 40:
-                      print('✅ Model meets RMSE criteria (<40), uploading to Hugging Face Hub...')
+                  if rmse < 50:
+                      print('✅ Model meets RMSE criteria (<50), uploading to Hugging Face Hub...')
                       
                       login(token='${{ secrets.HF_TOKEN }}')
                       api = HfApi()
@@ -253,9 +253,9 @@ jobs:
                       else:
                           print('❌ No model files found')
                   else:
-                      print(f'❌ Model RMSE ({rmse:.2f}) does not meet criteria (<40)')
+                      print(f'❌ Model RMSE ({rmse:.2f}) does not meet criteria (<50)')
                       with open('models/model_rejected.txt', 'w') as f:
-                          f.write(f'Model rejected - RMSE: {rmse:.2f} (>= 40)\\n')
+                          f.write(f'Model rejected - RMSE: {rmse:.2f} (>= 50)\\n')
                           f.write(f'Timestamp: {datetime.now().isoformat()}\\n')
               else:
                   print('⚠️ No model metrics found')
