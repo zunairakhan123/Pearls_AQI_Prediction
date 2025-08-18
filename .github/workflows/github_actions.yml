@@ -693,6 +693,8 @@ jobs:
       
       - name: Upload Best Model to Hub
         run: python model_upload_job.py
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }} # Pass the token as an environment variable
       
       - name: Commit model status
         run: |
