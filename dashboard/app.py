@@ -162,14 +162,16 @@ class AQIDashboard:
 
     @st.cache_data(ttl=3600)  # Cache for 1 hour
     def load_historical_data(_self):
-        """Load latest historical AQI data for visualization from Hugging Face Hub."""
+        """Load latest historical AQI data for visualization from the local directory."""
         try:
-            # Assumes the latest historical data is also pushed to the Hub
-            local_path = hf_hub_download(repo_id=_self.hf_repo, filename="data/raw/aqi_data.csv", token=_self.hf_token)
+            # Read the file directly from the local path within the Hugging Face Space
+            local_path = "data/raw/aqi_data.csv"
             return pd.read_csv(local_path)
         except Exception as e:
-            st.warning(f"Failed to load historical data from Hugging Face Hub: {e}")
+            # This warning will show if the file is not found on the Space
+            st.warning(f"Failed to load historical data from local directory: {e}")
             return pd.DataFrame()
+
 
     def get_aqi_color(self, aqi_value):
         """Get color based on AQI value"""
