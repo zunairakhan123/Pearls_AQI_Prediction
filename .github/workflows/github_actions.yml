@@ -469,8 +469,6 @@
 
 # Complete GitHub Actions with Hugging Face Hub + Spaces Integration
 
-# Complete GitHub Actions with Hugging Face Hub + Spaces Integration
-
 name: AQI Pipeline with Hugging Face Integration
 
 on:
@@ -691,10 +689,11 @@ jobs:
       - name: Train models
         run: python model_training/train_model.py
       
-      - name: Upload Best Model to Hub
+      - name: Upload Best Model and Registry to Hub
         run: python model_upload_job.py
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }} # Pass the token as an environment variable
+          HF_REPO: ${{ env.HF_REPO }}
       
       - name: Commit model status
         run: |
@@ -732,51 +731,51 @@ jobs:
         run: |
           python -c "
           import os
-          import re
+          import pandas as pd
           from huggingface_hub import HfApi, login, hf_hub_download
           
           try:
             login(token='${{ secrets.HF_TOKEN }}')
             api = HfApi()
             repo_id = os.environ.get('HF_REPO')
-            
-            files = api.list_repo_files(repo_id=repo_id, repo_type='model')
-            model_files = [f for f in files if f.startswith('models/') and ('.joblib' in f or '.pkl' in f)]
-            
-            if model_files:
-              best_model_file = None
-              best_rmse = float('inf')
-              
-              for file_path in model_files:
-                filename = os.path.basename(file_path)
-                rmse_match = re.search(r'RMSE(\d+\.?\d*)', filename)
-                if rmse_match:
-                  rmse = float(rmse_match.group(1))
-                  if rmse < best_rmse:
-                    best_rmse = rmse
-                    best_model_file = file_path
-              
-              if best_model_file:
-                os.makedirs('models', exist_ok=True)
+
+            # Download the model registry first
+            registry_path = hf_hub_download(
+                repo_id=repo_id,
+                filename='models/model_registry.csv',
+                local_dir='.',
+                local_dir_use_symlinks=False
+            )
+            print('✅ Downloaded model registry from Hugging Face Hub')
+
+            # Read the registry to find the best model
+            registry_df = pd.read_csv(registry_path)
+            if not registry_df.empty:
+                best_model_row = registry_df.loc[registry_df['test_overall_rmse'].idxmin()]
+                best_model_filename = best_model_row['model_file']
+                
+                # Download the best model
                 local_path = hf_hub_download(
-                  repo_id=repo_id,
-                  filename=best_model_file,
-                  local_dir='.',
-                  local_dir_use_symlinks=False
+                    repo_id=repo_id,
+                    filename=f'models/{best_model_filename}',
+                    local_dir='.',
+                    local_dir_use_symlinks=False
                 )
                 
-                import shutil
-                shutil.copy2(local_path, 'models/best_model.joblib')
-                print(f'✅ Downloaded best model (RMSE: {best_rmse}) from Hugging Face Hub')
-              else:
-                print('⚠️ No models with RMSE in filename found')
+                # Copy and rename it to the expected path for the inference script
+                os.makedirs('models', exist_ok=True)
+                os.rename(local_path, 'models/best_model.joblib')
+                print(f'✅ Downloaded and renamed best model ({best_model_filename}) from Hugging Face Hub')
             else:
-              print('⚠️ No model files found in Hugging Face Hub')
-              
+                print('⚠️ Model registry is empty. Inference will proceed without a model.')
+
           except Exception as e:
             print(f'❌ Model download failed: {str(e)}')
-            print('Will attempt inference with local models if available')
+            print('Inference will proceed with local models if available.')
           "
+        env: # Pass the token to this step
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO: ${{ env.HF_REPO }}
       
       - name: Run inference
         run: python pipelines/inference_pipeline.py
@@ -838,6 +837,8 @@ jobs:
           except Exception as e:
             print(f'❌ Prediction upload failed: {str(e)}')
           "
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
       
       - name: Commit predictions metadata
         run: |
@@ -884,9 +885,8 @@ jobs:
             api = HfApi()
             space_id = os.environ.get('HF_SPACE')
             
-            if not os.environ.get('HF_TOKEN'):
-              print('❌ HF_TOKEN not set in secrets. Aborting deployment.')
-              exit(1)
+            # The token is passed as an environment variable in the workflow step.
+            # We don't need to check for the secret inside the Python script.
             
             space_repo_name = space_id.split('/')[-1]
             
@@ -926,6 +926,8 @@ jobs:
             print(f'❌ Deployment to HF Spaces failed: {str(e)}')
             exit(1)
           "
+        env: # This is the missing piece!
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
   notify:
     runs-on: ubuntu-latest
     needs: [data-fetching, model-training, inference, deploy-streamlit]
