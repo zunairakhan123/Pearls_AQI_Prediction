@@ -8,7 +8,7 @@ This system provides:
 - **Real-time AQI monitoring** for Lahore city
 - **3-day AQI predictions** using machine learning
 - **Automated data pipeline** with hourly updates
-- **Interactive dashboard** with SHAP explanations
+- **Interactive dashboard** with SHAP explanations[not for HF space]
 - **Hazardous air quality alerts**
 - **Model performance tracking**
 
@@ -25,7 +25,7 @@ Pearls_AQIPredictor/
 ├── models/               # Trained models storage
 │
 ├── data_fetching/
-│   └── fetch_aqi_data.py           # Data fetching from APIs
+│   └── fetch_aqi_data.py ,web_scrape.py ,aqi.py           # Data fetching from APIs
 │
 ├── feature_engineering/
 │   └── compute_features.py         # Feature computation
@@ -44,9 +44,9 @@ Pearls_AQIPredictor/
 ├── dashboard/
 │   └── app.py                      # Streamlit dashboard
 │
-├── cicd/
+├── .github/workflows/
 │   ├── github_actions.yml          # GitHub Actions CI/CD
-│   └── airflow_dag.py              # Airflow DAG
+│   
 │
 ├── explainability/
 │   └── shap_explain.py             # Model explainability
@@ -139,23 +139,6 @@ The GitHub Actions workflow will:
 - ✅ Run **tests** on every push/PR
 - ✅ **Auto-commit** updated data and models
 
-### Airflow Setup (Optional)
-
-If you prefer Apache Airflow:
-
-```bash
-# Install Airflow
-pip install apache-airflow
-
-# Initialize Airflow
-airflow db init
-
-# Copy DAG file
-cp cicd/airflow_dag.py ~/airflow/dags/
-
-# Start Airflow
-airflow webserver --port 8080
-airflow scheduler
 ```
 
 ## 📊 Dashboard Features
@@ -325,22 +308,6 @@ We welcome contributions! Please:
 3. **Add** tests for new functionality
 4. **Submit** a pull request
 
-### Development Setup
-
-```bash
-# Install development dependencies
-pip install pytest black flake8
-
-# Run tests
-python -m pytest tests/
-
-# Format code
-black .
-
-# Check code style
-flake8 .
-```
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -353,15 +320,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **SHAP** for model explainability
 - **scikit-learn** for machine learning tools
 
-## 📞 Support
-
-For questions, issues, or suggestions:
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/Pearls_AQIPredictor/issues)
-- **Email**: your.email@example.com
-- **Documentation**: Check this README and code comments
-
----
 
 **⚡ Built with ❤️ for cleaner air in Lahore, Pakistan**
 
 *This system uses only open-source tools and free-tier APIs to ensure accessibility and sustainability.*
+
