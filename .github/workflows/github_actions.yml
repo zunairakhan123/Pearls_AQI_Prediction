@@ -632,156 +632,75 @@ jobs:
           git push origin main || echo "Push failed"
 
   model-training:
-    runs-on: ubuntu-latest
-    needs: [setup, data-fetching]
-    if: needs.setup.outputs.should-train != 'false'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-      
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly huggingface_hub
-      
-      - name: Set Python path
-        run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-      
-      - name: Download latest features from Hugging Face Hub
-        run: |
-          python -c "
-          import os
-          from huggingface_hub import HfApi, login, hf_hub_download
-          
-          try:
-              login(token='${{ secrets.HF_TOKEN }}')
-              api = HfApi()
-              repo_id = os.environ.get('HF_REPO')
-              
-              files = api.list_repo_files(repo_id=repo_id, repo_type='model')
-              feature_files = [f for f in files if f.startswith('features/') and 'features_' in f]
-              
-              if feature_files:
-                  latest_file = sorted(feature_files, reverse=True)[0]
-                  
-                  os.makedirs('data/features', exist_ok=True)
-                  local_path = hf_hub_download(
-                      repo_id=repo_id,
-                      filename=latest_file,
-                      local_dir='data',
-                      local_dir_use_symlinks=False
-                  )
-                  print(f'✅ Downloaded {latest_file} from Hugging Face Hub')
-              else:
-                  print('⚠️ No feature files found in Hugging Face Hub')
-                  
-          except Exception as e:
-              print(f'❌ Hugging Face download failed: {str(e)}')
-              exit(1)
-          "
-      
-      - name: Train models
-        run: python model_training/train_model.py
-      
-      - name: Generate SHAP explanations
-        run: python explainability/shap_explain.py
-      
-      - name: Evaluate and upload model if RMSE < 50
-        run: |
-          python -c "
-          import os
-          import joblib
-          import json
-          import glob
-          from huggingface_hub import HfApi, login
-          from datetime import datetime
-          
-          try:
-              if os.path.exists('models/model_metrics.json'):
-                  with open('models/model_metrics.json', 'r') as f:
-                      metrics = json.load(f)
-                  
-                  rmse = metrics.get('rmse', float('inf'))
-                  best_model_name = metrics.get('best_model')
-                  
-                  if not best_model_name:
-                      print('❌ Could not find best model name in metrics.json. Aborting upload.')
-                      exit(1)
-                  
-                  print(f'🎯 Best Model: {best_model_name} with RMSE: {rmse:.2f}')
-                  
-                  if rmse < 50:
-                      print('✅ Model meets RMSE criteria (<50), uploading to Hugging Face Hub...')
-                      
-                      login(token='${{ secrets.HF_TOKEN }}')
-                      api = HfApi()
-                      repo_id = os.environ.get('HF_REPO')
-                      timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                      
-                      # Construct the path to the best model file
-                      best_model_path = os.path.join('models', f'{best_model_name}.joblib')
-                      
-                      if os.path.exists(best_model_path):
-                          model_name = os.path.basename(best_model_path)
-                          hf_model_path = f'models/{timestamp}_RMSE{rmse:.1f}_{model_name}'
-                          
-                          api.upload_file(
-                              path_or_fileobj=best_model_path,
-                              path_in_repo=hf_model_path,
-                              repo_id=repo_id,
-                              commit_message=f'🤖 Upload model with RMSE: {rmse:.2f}'
-                          )
-                          
-                          # Upload metrics
-                          with open('temp_metrics.json', 'w') as f:
-                              json.dump(metrics, f, indent=2)
-                          
-                          api.upload_file(
-                              path_or_fileobj='temp_metrics.json',
-                              path_in_repo=f'models/{timestamp}_RMSE{rmse:.1f}_metrics.json',
-                              repo_id=repo_id,
-                              commit_message=f'📈 Upload metrics for RMSE: {rmse:.2f}'
-                          )
-                          os.remove('temp_metrics.json')
-                          
-                          print(f'✅ Uploaded model to Hugging Face Hub with RMSE: {rmse:.2f}')
-                          
-                          with open('models/best_model_status.txt', 'w') as f:
-                              f.write(f'Best model uploaded to Hugging Face Hub\\n')
-                              f.write(f'RMSE: {rmse:.2f}\\n')
-                              f.write(f'HF Path: {hf_model_path}\\n')
-                              f.write(f'Timestamp: {datetime.now().isoformat()}\\n')
-                      else:
-                          print(f'❌ Best model file not found at {best_model_path}')
-                          exit(1)
-                  else:
-                      print(f'❌ Model RMSE ({rmse:.2f}) does not meet criteria (<50)')
-                      with open('models/model_rejected.txt', 'w') as f:
-                          f.write(f'Model rejected - RMSE: {rmse:.2f} (>= 50)\\n')
-                          f.write(f'Timestamp: {datetime.now().isoformat()}\\n')
-              else:
-                  print('⚠️ No model metrics found')
-                  
-          except Exception as e:
-              print(f'❌ Model evaluation/upload failed: {str(e)}')
-              exit(1)
-          "
-      
-      - name: Commit model status
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add models/
-          git add explainability/
-          git commit -m "🤖 Update model status: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
-          git push origin main || echo "Push failed"
+  runs-on: ubuntu-latest
+  needs: [setup, data-fetching]
+  if: needs.setup.outputs.should-train != 'false'
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib streamlit plotly huggingface_hub
+    
+    - name: Set Python path
+      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+    
+    - name: Download latest features from Hugging Face Hub
+      run: |
+        python -c "
+        import os
+        from huggingface_hub import HfApi, login, hf_hub_download
+        
+        try:
+            login(token='${{ secrets.HF_TOKEN }}')
+            api = HfApi()
+            repo_id = os.environ.get('HF_REPO')
+            
+            files = api.list_repo_files(repo_id=repo_id, repo_type='model')
+            feature_files = [f for f in files if f.startswith('features/') and 'features_' in f]
+            
+            if feature_files:
+                latest_file = sorted(feature_files, reverse=True)[0]
+                
+                os.makedirs('data/features', exist_ok=True)
+                local_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=latest_file,
+                    local_dir='data',
+                    local_dir_use_symlinks=False
+                )
+                print(f'✅ Downloaded {latest_file} from Hugging Face Hub')
+            else:
+                print('⚠️ No feature files found in Hugging Face Hub')
+                
+        except Exception as e:
+            print(f'❌ Hugging Face download failed: {str(e)}')
+            exit(1)
+        "
+    
+    - name: Train models
+      run: python model_training/train_model.py
+    
+    - name: Upload Best Model to Hub
+      run: python model_upload_job.py
+    
+    - name: Commit model status
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        git add models/
+        git add explainability/
+        git commit -m "🤖 Update model status: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
+        git push origin main || echo "Push failed"
 
   inference:
     runs-on: ubuntu-latest
@@ -1021,4 +940,4 @@ jobs:
           echo "- 🌐 Live Dashboard: [HF Spaces](${{ env.HF_SPACE }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🎯 Only models with RMSE < 40 are saved" >> $GITHUB_STEP_SUMMARY
           echo "- ⚡ Auto-updating dashboard with latest models" >> $GITHUB_STEP_SUMMARY
-          
+
