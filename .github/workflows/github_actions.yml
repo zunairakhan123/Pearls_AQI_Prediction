@@ -469,8 +469,6 @@
 
 # Complete GitHub Actions with Hugging Face Hub + Spaces Integration
 
-# Complete GitHub Actions with Hugging Face Hub + Spaces Integration
-
 name: AQI Pipeline with Hugging Face Integration
 
 on:
@@ -490,8 +488,8 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.9'
-  HF_REPO: ${{ secrets.HF_REPO }}           # e.g., "yourusername/aqi-models"
-  HF_SPACE: ${{ secrets.HF_SPACE }}         # e.g., "yourusername/aqi-dashboard"
+  HF_REPO: ${{ secrets.HF_REPO }}         # e.g., "yourusername/aqi-models"
+  HF_SPACE: ${{ secrets.HF_SPACE }}        # e.g., "yourusername/aqi-dashboard"
 
 jobs:
   setup:
@@ -734,8 +732,8 @@ jobs:
           python -c "
           import os
           import pandas as pd
-          from huggingface_hub import HfApi, login, hf_hub_download
-          
+          from huggingface_hub import HfApi, login, hf_hub_download, HfHubHTTPError
+
           try:
             login(token='${{ secrets.HF_TOKEN }}')
             api = HfApi()
@@ -743,42 +741,47 @@ jobs:
 
             # Download the model registry first
             registry_path = hf_hub_download(
-                repo_id=repo_id,
-                filename='models/model_registry.csv',
-                local_dir='.',
-                local_dir_use_symlinks=False
+              repo_id=repo_id,
+              filename='models/model_registry.csv',
+              local_dir='.',
+              local_dir_use_symlinks=False
             )
             print('✅ Downloaded model registry from Hugging Face Hub')
 
             # Read the registry to find the best model
             registry_df = pd.read_csv(registry_path)
             if not registry_df.empty:
-                best_model_row = registry_df.loc[registry_df['test_overall_rmse'].idxmin()]
-                best_model_filename = best_model_row['model_file']
-                
-                # Create the models directory if it doesn't exist
-                os.makedirs('models', exist_ok=True)
-                
-                # Download the best model directly into the models directory
-                # Note: The 'local_dir' and 'filename' are now consistent with what your script expects
+              best_model_row = registry_df.loc[registry_df['test_overall_rmse'].idxmin()]
+              best_model_filename = best_model_row['model_file']
+
+              # Create the models directory if it doesn't exist
+              os.makedirs('models', exist_ok=True)
+
+              # Attempt to download the best model
+              try:
                 hf_hub_download(
-                    repo_id=repo_id,
-                    filename=f'models/{best_model_filename}',
-                    local_dir='models',
-                    local_dir_use_symlinks=False
+                  repo_id=repo_id,
+                  filename=f'models/{best_model_filename}',
+                  local_dir='models',
+                  local_dir_use_symlinks=False
                 )
-                
                 print(f'✅ Downloaded best model ({best_model_filename}) from Hugging Face Hub')
+              except HfHubHTTPError as e:
+                # Handle the case where the file is not found on the Hub
+                print(f'⚠️ Warning: Failed to download best model from Hub. File may not exist or an error occurred.')
+                print(f'Error: {e}')
+                print('Inference will attempt to use a previously downloaded model if available.')
             else:
-                print('⚠️ Model registry is empty. Inference will proceed without a model.')
+              print('⚠️ Model registry is empty. Inference will proceed without a new model.')
 
           except Exception as e:
             print(f'❌ Model download failed: {str(e)}')
             print('Inference will proceed with local models if available.')
           "
-        env: # Pass the token to this step
+        env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_REPO: ${{ env.HF_REPO }}
+
       
       - name: Run inference
         run: python pipelines/inference_pipeline.py
@@ -873,9 +876,9 @@ jobs:
       
       - name: Set up Git LFS
         run: |
+          sudo apt-get update
           sudo apt-get install git-lfs
           git lfs install
-          git lfs pull
       
       - name: Deploy Streamlit app to Hugging Face Spaces
         run: |
@@ -892,35 +895,42 @@ jobs:
             
             space_repo_name = space_id.split('/')[-1]
             
-            # Check if the repository exists before trying to clone
-            api.repo_info(repo_id=space_id)
+            # Check if the repository exists and get user info
+            repo_info = api.repo_info(repo_id=space_id, repo_type='space')
+            user_name = repo_info.author
             
-            # Clone the Space repository to get a local copy
+            # Construct the authenticated clone URL
+            clone_url = f'https://{user_name}:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/{space_id}'
+            
+            # Clone the Space repository using the authenticated URL
             print(f'Cloning Hugging Face Space: {space_id}')
-            os.system(f'git clone https://huggingface.co/spaces/{space_id}')
+            if os.system(f'git clone {clone_url}'):
+              raise Exception('Git clone failed.')
+            
+            # Move back to the main repo root
             os.chdir(space_repo_name)
             os.system('git config user.name \"github-actions[bot]\"')
             os.system('git config user.email \"github-actions[bot]@users.noreply.github.com\"')
-            os.system('git pull')
-            
-            # Move back to the main repo root
-            os.chdir('..')
+            os.system('git lfs pull') # LFS pull inside the cloned repo
             
             # Copy files from your main repository into the cloned Space directory
-            shutil.copy('app.py', space_repo_name)
-            shutil.copy('requirements.txt', space_repo_name)
+            shutil.copy('../app.py', '.')
+            shutil.copy('../requirements.txt', '.')
             
-            os.makedirs(os.path.join(space_repo_name, 'predictions'), exist_ok=True)
-            os.makedirs(os.path.join(space_repo_name, 'data', 'raw'), exist_ok=True)
+            os.makedirs('predictions', exist_ok=True)
+            os.makedirs('data/raw', exist_ok=True)
             
-            shutil.copytree('predictions', os.path.join(space_repo_name, 'predictions'), dirs_exist_ok=True)
-            shutil.copytree('data/raw', os.path.join(space_repo_name, 'data', 'raw'), dirs_exist_ok=True)
+            shutil.copytree('../predictions', './predictions', dirs_exist_ok=True)
+            shutil.copytree('../data/raw', './data/raw', dirs_exist_ok=True)
             
-            # Move into the Space directory for commit and push
-            os.chdir(space_repo_name)
+            # Commit and push
+            print('Committing and pushing changes...')
             os.system('git add .')
-            os.system('git commit -m \"🚀 Update Streamlit app via GitHub Actions\" || echo \"No changes to commit\"')
-            os.system('git push')
+            if os.system('git commit -m \"🚀 Update Streamlit app via GitHub Actions\" || echo \"No changes to commit\"'):
+              print('⚠️ Nothing to commit')
+            
+            if os.system('git push'):
+              raise Exception('Git push failed.')
             
             print(f'✅ Successfully deployed to Hugging Face Spaces!')
             print(f'🌐 Your app is available at: https://huggingface.co/spaces/{space_id}')
