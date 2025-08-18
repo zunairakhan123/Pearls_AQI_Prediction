@@ -824,61 +824,10 @@ jobs:
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
       
       - name: Upload predictions and alerts to Hugging Face Hub
-        run: |
-          python -c "
-          import os
-          import glob
-          from huggingface_hub import HfApi, login
-          from datetime import datetime
-          
-          try:
-            login(token='${{ secrets.HF_TOKEN }}')
-            api = HfApi()
-            repo_id = os.environ.get('HF_REPO')
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            
-            # Upload latest prediction and alerts
-            prediction_path = 'predictions/latest_prediction.csv'
-            alerts_path = 'predictions/aqi_alerts.csv'
-
-            if os.path.exists(prediction_path):
-              api.upload_file(
-                path_or_fileobj=prediction_path,
-                path_in_repo='predictions/latest_prediction.csv',
-                repo_id=repo_id,
-                commit_message='🔮 Upload latest predictions'
-              )
-              print(f'✅ Uploaded {prediction_path} to Hugging Face Hub')
-
-            if os.path.exists(alerts_path):
-              api.upload_file(
-                path_or_fileobj=alerts_path,
-                path_in_repo='predictions/aqi_alerts.csv',
-                repo_id=repo_id,
-                commit_message='🚨 Upload AQI alerts'
-              )
-              print(f'✅ Uploaded {alerts_path} to Hugging Face Hub')
-
-            # Upload timestamped predictions
-            prediction_files = glob.glob('predictions/*.csv') + glob.glob('predictions/*.json')
-            for pred_file in prediction_files:
-              if 'latest_prediction' not in pred_file and 'aqi_alerts' not in pred_file:
-                filename = os.path.basename(pred_file)
-                hf_path = f'predictions/{timestamp}_{filename}'
-                
-                api.upload_file(
-                  path_or_fileobj=pred_file,
-                  path_in_repo=hf_path,
-                  repo_id=repo_id,
-                  commit_message=f'🔮 Upload predictions: {timestamp}'
-                )
-                print(f'✅ Uploaded {pred_file} to Hugging Face Hub')
-                
-          except Exception as e:
-            print(f'❌ Prediction upload failed: {str(e)}')
-          "
+        run: python pipelines/upload_predictions_to_hub.py
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO: ${{ env.HF_REPO }}
       
       - name: Commit predictions metadata
         run: |
@@ -1072,4 +1021,3 @@ jobs:
           echo "- 🌐 Live Dashboard: [HF Spaces](${{ env.HF_SPACE }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🎯 Only models with RMSE < 40 are saved" >> $GITHUB_STEP_SUMMARY
           echo "- ⚡ Auto-updating dashboard with latest models" >> $GITHUB_STEP_SUMMARY
-          
