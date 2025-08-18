@@ -469,6 +469,8 @@
 
 # Complete GitHub Actions with Hugging Face Hub + Spaces Integration
 
+# Complete GitHub Actions with Hugging Face Hub + Spaces Integration
+
 name: AQI Pipeline with Hugging Face Integration
 
 on:
@@ -754,17 +756,19 @@ jobs:
                 best_model_row = registry_df.loc[registry_df['test_overall_rmse'].idxmin()]
                 best_model_filename = best_model_row['model_file']
                 
-                # Download the best model
-                local_path = hf_hub_download(
+                # Create the models directory if it doesn't exist
+                os.makedirs('models', exist_ok=True)
+                
+                # Download the best model directly into the models directory
+                hf_hub_download(
                     repo_id=repo_id,
                     filename=f'models/{best_model_filename}',
-                    local_dir='.',
+                    local_dir='models',
                     local_dir_use_symlinks=False
                 )
                 
-                # Copy and rename it to the expected path for the inference script
-                os.makedirs('models', exist_ok=True)
-                os.rename(local_path, 'models/best_model.joblib')
+                # Rename the downloaded file to the expected name
+                os.rename(os.path.join('models', best_model_filename), 'models/best_model.joblib')
                 print(f'✅ Downloaded and renamed best model ({best_model_filename}) from Hugging Face Hub')
             else:
                 print('⚠️ Model registry is empty. Inference will proceed without a model.')
@@ -890,7 +894,7 @@ jobs:
             
             space_repo_name = space_id.split('/')[-1]
             
-            # Clone the Space repository to get a local copy
+            # Corrected: Use the full space_id for all API calls
             print(f'Cloning Hugging Face Space: {space_id}')
             api.repo_info(repo_id=space_id) # check if repo exists
             
@@ -926,7 +930,7 @@ jobs:
             print(f'❌ Deployment to HF Spaces failed: {str(e)}')
             exit(1)
           "
-        env: # This is the missing piece!
+        env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
   notify:
     runs-on: ubuntu-latest
