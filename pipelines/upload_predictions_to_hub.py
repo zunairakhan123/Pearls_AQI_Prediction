@@ -24,7 +24,7 @@ def main():
         print("✅ Logged in to Hugging Face Hub successfully.")
 
         # Define the base paths for the files to upload, updated to include the 'data' directory
-        prediction_path = 'data/predictions/latest_prediction.csv'
+        prediction_path = 'data/predictions/latest_predictions.csv'
         alerts_path = 'data/predictions/aqi_alerts.csv'
 
         # Upload latest prediction and alerts files
@@ -32,7 +32,7 @@ def main():
         if os.path.exists(prediction_path):
             api.upload_file(
                 path_or_fileobj=prediction_path,
-                path_in_repo='predictions/latest_prediction.csv',
+                path_in_repo='predictions/latest_predictions.csv',
                 repo_id=repo_id,
                 commit_message='🔮 Upload latest predictions'
             )
