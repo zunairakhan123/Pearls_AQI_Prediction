@@ -760,6 +760,7 @@ jobs:
                 os.makedirs('models', exist_ok=True)
                 
                 # Download the best model directly into the models directory
+                # Note: The 'local_dir' and 'filename' are now consistent with what your script expects
                 hf_hub_download(
                     repo_id=repo_id,
                     filename=f'models/{best_model_filename}',
@@ -767,9 +768,7 @@ jobs:
                     local_dir_use_symlinks=False
                 )
                 
-                # Rename the downloaded file to the expected name
-                os.rename(os.path.join('models', best_model_filename), 'models/best_model.joblib')
-                print(f'✅ Downloaded and renamed best model ({best_model_filename}) from Hugging Face Hub')
+                print(f'✅ Downloaded best model ({best_model_filename}) from Hugging Face Hub')
             else:
                 print('⚠️ Model registry is empty. Inference will proceed without a model.')
 
@@ -883,21 +882,21 @@ jobs:
           python -c "
           import os
           import shutil
-          from huggingface_hub import HfApi
+          from huggingface_hub import HfApi, login
           
           try:
+            # Login with the HF token from the environment variable
+            login(token='${{ secrets.HF_TOKEN }}')
             api = HfApi()
             space_id = os.environ.get('HF_SPACE')
             
-            # The token is passed as an environment variable in the workflow step.
-            # We don't need to check for the secret inside the Python script.
-            
             space_repo_name = space_id.split('/')[-1]
             
-            # Corrected: Use the full space_id for all API calls
-            print(f'Cloning Hugging Face Space: {space_id}')
-            api.repo_info(repo_id=space_id) # check if repo exists
+            # Check if the repository exists before trying to clone
+            api.repo_info(repo_id=space_id)
             
+            # Clone the Space repository to get a local copy
+            print(f'Cloning Hugging Face Space: {space_id}')
             os.system(f'git clone https://huggingface.co/spaces/{space_id}')
             os.chdir(space_repo_name)
             os.system('git config user.name \"github-actions[bot]\"')
