@@ -5,7 +5,8 @@ from huggingface_hub import HfApi
 
 def upload_best_model_to_hub():
     """
-    Reads the model registry, finds the best model, and uploads its files to the Hugging Face Hub.
+    Reads the model registry, finds the best model, and uploads its files,
+    including the registry itself, to the Hugging Face Hub.
     """
     
     # 1. Get environment variables
@@ -77,6 +78,16 @@ def upload_best_model_to_hub():
                 )
                 print("✅ Scaler upload successful!")
                 
+        # 5. Add the missing piece: Upload the model registry file
+        print(f"✅ Uploading model registry '{os.path.basename(registry_file_path)}' to Hugging Face Hub...")
+        api.upload_file(
+            path_or_fileobj=registry_file_path,
+            path_in_repo=f'models/{os.path.basename(registry_file_path)}',
+            repo_id=HF_REPO,
+            repo_type="model",
+        )
+        print("✅ Model registry upload successful!")
+            
     except Exception as e:
         print(f"❌ Failed to upload files to Hugging Face Hub: {e}")
         sys.exit(1)
