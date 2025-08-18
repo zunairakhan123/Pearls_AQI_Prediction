@@ -23,9 +23,9 @@ def main():
 
         print("✅ Logged in to Hugging Face Hub successfully.")
 
-        # Define the base paths for the files to upload
-        prediction_path = 'predictions/latest_prediction.csv'
-        alerts_path = 'predictions/aqi_alerts.csv'
+        # Define the base paths for the files to upload, updated to include the 'data' directory
+        prediction_path = 'data/predictions/latest_prediction.csv'
+        alerts_path = 'data/predictions/aqi_alerts.csv'
 
         # Upload latest prediction and alerts files
         print("Starting upload of latest predictions and alerts...")
@@ -53,7 +53,8 @@ def main():
 
         # Upload timestamped predictions
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        prediction_files = glob.glob('predictions/*.csv') + glob.glob('predictions/*.json')
+        # Updated glob to search within the 'data' directory
+        prediction_files = glob.glob('data/predictions/*.csv') + glob.glob('data/predictions/*.json')
         
         print("Checking for timestamped prediction files to upload...")
         for pred_file in prediction_files:
