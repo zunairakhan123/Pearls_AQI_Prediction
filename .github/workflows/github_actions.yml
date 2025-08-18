@@ -473,9 +473,9 @@ name: AQI Pipeline with Hugging Face Integration
 
 on:
   schedule:
-    - cron: '0 */1 * * *'      # Every hour for data fetching
-    - cron: '0 1 * * *'        # Daily at 6 AM for training karachi timezone
-    - cron: '0 */6 * * *'      # Every 6 hours for inference
+    - cron: '0 */1 * * *'    # Every hour for data fetching
+    - cron: '0 1 * * *'      # Daily at 6 AM for training karachi timezone
+    - cron: '0 */6 * * *'    # Every 6 hours for inference
   workflow_dispatch:
   push:
     branches: [main, develop]
@@ -504,22 +504,25 @@ jobs:
           event="${{ github.event_name }}"
           schedule="${{ github.event.schedule }}"
           
-          if [[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
-            echo "data_fetch=true" >> $GITHUB_OUTPUT
-          else
-            echo "data_fetch=false" >> $GITHUB_OUTPUT
+          if [[ "$event" == "push" || "$event" == "pull_request" ]]; then
+              echo "data_fetch=true" >> "$GITHUB_OUTPUT"
+              echo "training=true" >> "$GITHUB_OUTPUT"
+              echo "inference=true" >> "$GITHUB_OUTPUT"
+              exit 0
           fi
           
-          if [[ ("$event" == "schedule" && "$schedule" == "0 6 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
-            echo "training=true" >> $GITHUB_OUTPUT
-          else
-            echo "training=false" >> $GITHUB_OUTPUT
-          fi
-          
-          if [[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
-            echo "inference=true" >> $GITHUB_OUTPUT
-          else
-            echo "inference=false" >> $GITHUB_OUTPUT
+          if [[ "$schedule" == "0 */1 * * *" ]]; then
+              echo "data_fetch=true" >> "$GITHUB_OUTPUT"
+              echo "training=false" >> "$GITHUB_OUTPUT"
+              echo "inference=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$schedule" == "0 1 * * *" ]]; then
+              echo "data_fetch=true" >> "$GITHUB_OUTPUT"
+              echo "training=true" >> "$GITHUB_OUTPUT"
+              echo "inference=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$schedule" == "0 */6 * * *" ]]; then
+              echo "data_fetch=true" >> "$GITHUB_OUTPUT"
+              echo "training=false" >> "$GITHUB_OUTPUT"
+              echo "inference=true" >> "$GITHUB_OUTPUT"
           fi
 
   data-fetching:
@@ -528,184 +531,27 @@ jobs:
     if: needs.setup.outputs.should-fetch != 'false'
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-      
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly huggingface_hub
+          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib streamlit plotly huggingface_hub
+
+      - name: Fetch and process data
+        run: python data_ingestion/get_data.py
       
-      - name: Set Python path
-        run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-      
-      - name: Fetch new data
-        run: python data_fetching/fetch_aqi_data.py
+      - name: Upload new data to Hugging Face Hub
         env:
-          AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
-          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-      
-      - name: Compute features
-        run: python feature_engineering/compute_features.py
-      
-      - name: Upload data and metadata to Hugging Face Hub
-        run: |
-          python -c "
-          import os
-          import glob
-          from huggingface_hub import HfApi, login
-          from datetime import datetime
-          
-          try:
-              login(token='${{ secrets.HF_TOKEN }}')
-              api = HfApi()
-              
-              repo_id = os.environ.get('HF_REPO')
-              timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-              
-              # Upload latest feature files
-              feature_files = glob.glob('data/features/features_*.csv*')
-              if feature_files:
-                  latest_feature_file = max(feature_files, key=os.path.getctime)
-                  filename = os.path.basename(latest_feature_file)
-                  hf_path = f'features/{timestamp}_{filename}'
-                  
-                  api.upload_file(
-                      path_or_fileobj=latest_feature_file,
-                      path_in_repo=hf_path,
-                      repo_id=repo_id,
-                      commit_message=f'📊 Upload features: {timestamp}'
-                  )
-                  print(f'✅ Uploaded {latest_feature_file} to Hugging Face Hub as {hf_path}')
-              else:
-                  print('⚠️ No feature files found to upload')
-
-              # Upload feature metadata
-              metadata_path = 'data/features/feature_metadata.csv'
-              if os.path.exists(metadata_path):
-                  api.upload_file(
-                      path_or_fileobj=metadata_path,
-                      path_in_repo=f'features/{os.path.basename(metadata_path)}',
-                      repo_id=repo_id,
-                      commit_message='✨ Upload feature metadata'
-                  )
-                  print(f'✅ Uploaded {metadata_path} to Hugging Face Hub')
-
-              # Upload raw data files
-              raw_data_files = glob.glob('data/raw/*')
-              if raw_data_files:
-                  for raw_file in raw_data_files:
-                      if os.path.isfile(raw_file):
-                          filename = os.path.basename(raw_file)
-                          hf_path = f'data/raw/{filename}'
-                          
-                          api.upload_file(
-                              path_or_fileobj=raw_file,
-                              path_in_repo=hf_path,
-                              repo_id=repo_id,
-                              commit_message=f'📦 Upload raw data: {filename}'
-                          )
-                          print(f'✅ Uploaded {raw_file} to Hugging Face Hub')
-              else:
-                  print('⚠️ No raw data files found to upload')
-              
-          except Exception as e:
-              print(f'❌ Hugging Face upload failed: {str(e)}')
-              exit(1)
-          "
-      
-      - name: Commit metadata only
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          echo "$(date -u '+%Y-%m-%d %H:%M UTC')" > data/last_update.txt
-          echo "Features uploaded to Hugging Face Hub" > data/hf_status.txt
-          
-          git add data/last_update.txt data/hf_status.txt
-          git commit -m "📊 Update data metadata: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
-          git push origin main || echo "Push failed"
-
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python data_ingestion/upload_data.py
+  
   model-training:
-  runs-on: ubuntu-latest
-  needs: [setup, data-fetching]
-  if: needs.setup.outputs.should-train != 'false'
-  steps:
-    - uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
-    
-    - uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install dependencies
-      run: |
-        pip install --upgrade pip
-        pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib streamlit plotly huggingface_hub
-    
-    - name: Set Python path
-      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-    
-    - name: Download latest features from Hugging Face Hub
-      run: |
-        python -c "
-        import os
-        from huggingface_hub import HfApi, login, hf_hub_download
-        
-        try:
-            login(token='${{ secrets.HF_TOKEN }}')
-            api = HfApi()
-            repo_id = os.environ.get('HF_REPO')
-            
-            files = api.list_repo_files(repo_id=repo_id, repo_type='model')
-            feature_files = [f for f in files if f.startswith('features/') and 'features_' in f]
-            
-            if feature_files:
-                latest_file = sorted(feature_files, reverse=True)[0]
-                
-                os.makedirs('data/features', exist_ok=True)
-                local_path = hf_hub_download(
-                    repo_id=repo_id,
-                    filename=latest_file,
-                    local_dir='data',
-                    local_dir_use_symlinks=False
-                )
-                print(f'✅ Downloaded {latest_file} from Hugging Face Hub')
-            else:
-                print('⚠️ No feature files found in Hugging Face Hub')
-                
-        except Exception as e:
-            print(f'❌ Hugging Face download failed: {str(e)}')
-            exit(1)
-        "
-    
-    - name: Train models
-      run: python model_training/train_model.py
-    
-    - name: Upload Best Model to Hub
-      run: python model_upload_job.py
-    
-    - name: Commit model status
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        
-        git add models/
-        git add explainability/
-        git commit -m "🤖 Update model status: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
-        git push origin main || echo "Push failed"
-
-  inference:
     runs-on: ubuntu-latest
-    needs: [setup, data-fetching, model-training]
-    if: needs.setup.outputs.should-infer != 'false' && (needs.model-training.result == 'success' || needs.model-training.result == 'skipped')
+    needs: [setup, data-fetching]
+    if: needs.setup.outputs.should-train != 'false'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -719,16 +565,15 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib shap streamlit plotly huggingface_hub
+          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib streamlit plotly huggingface_hub
       
       - name: Set Python path
         run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
       
-      - name: Download best model from Hugging Face Hub
+      - name: Download latest features from Hugging Face Hub
         run: |
           python -c "
           import os
-          import re
           from huggingface_hub import HfApi, login, hf_hub_download
           
           try:
@@ -737,117 +582,47 @@ jobs:
               repo_id = os.environ.get('HF_REPO')
               
               files = api.list_repo_files(repo_id=repo_id, repo_type='model')
-              model_files = [f for f in files if f.startswith('models/') and ('.joblib' in f or '.pkl' in f)]
+              feature_files = [f for f in files if f.startswith('features/') and 'features_' in f]
               
-              if model_files:
-                  best_model_file = None
-                  best_rmse = float('inf')
+              if feature_files:
+                  latest_file = sorted(feature_files, reverse=True)[0]
                   
-                  for file_path in model_files:
-                      filename = os.path.basename(file_path)
-                      rmse_match = re.search(r'RMSE(\d+\.?\d*)', filename)
-                      if rmse_match:
-                          rmse = float(rmse_match.group(1))
-                          if rmse < best_rmse:
-                              best_rmse = rmse
-                              best_model_file = file_path
-                  
-                  if best_model_file:
-                      os.makedirs('models', exist_ok=True)
-                      local_path = hf_hub_download(
-                          repo_id=repo_id,
-                          filename=best_model_file,
-                          local_dir='.',
-                          local_dir_use_symlinks=False
-                      )
-                      
-                      import shutil
-                      shutil.copy2(local_path, 'models/best_model.joblib')
-                      print(f'✅ Downloaded best model (RMSE: {best_rmse}) from Hugging Face Hub')
-                  else:
-                      print('⚠️ No models with RMSE in filename found')
+                  os.makedirs('data/features', exist_ok=True)
+                  local_path = hf_hub_download(
+                      repo_id=repo_id,
+                      filename=latest_file,
+                      local_dir='data',
+                      local_dir_use_symlinks=False
+                  )
+                  print(f'✅ Downloaded {latest_file} from Hugging Face Hub')
               else:
-                  print('⚠️ No model files found in Hugging Face Hub')
+                  print('⚠️ No feature files found in Hugging Face Hub')
                   
           except Exception as e:
-              print(f'❌ Model download failed: {str(e)}')
-              print('Will attempt inference with local models if available')
+              print(f'❌ Hugging Face download failed: {str(e)}')
+              exit(1)
           "
       
-      - name: Run inference
-        run: python pipelines/inference_pipeline.py
-        env:
-          AQI_API_KEY: ${{ secrets.AQI_API_KEY }}
-          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+      - name: Train models
+        run: python model_training/train_model.py
       
-      - name: Upload predictions and alerts to Hugging Face Hub
-        run: |
-          python -c "
-          import os
-          import glob
-          from huggingface_hub import HfApi, login
-          from datetime import datetime
-          
-          try:
-              login(token='${{ secrets.HF_TOKEN }}')
-              api = HfApi()
-              repo_id = os.environ.get('HF_REPO')
-              timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-              
-              # Upload latest prediction and alerts
-              prediction_path = 'predictions/latest_prediction.csv'
-              alerts_path = 'predictions/aqi_alerts.csv'
-
-              if os.path.exists(prediction_path):
-                  api.upload_file(
-                      path_or_fileobj=prediction_path,
-                      path_in_repo='predictions/latest_prediction.csv',
-                      repo_id=repo_id,
-                      commit_message='🔮 Upload latest predictions'
-                  )
-                  print(f'✅ Uploaded {prediction_path} to Hugging Face Hub')
-
-              if os.path.exists(alerts_path):
-                  api.upload_file(
-                      path_or_fileobj=alerts_path,
-                      path_in_repo='predictions/aqi_alerts.csv',
-                      repo_id=repo_id,
-                      commit_message='🚨 Upload AQI alerts'
-                  )
-                  print(f'✅ Uploaded {alerts_path} to Hugging Face Hub')
-
-              # Upload timestamped predictions
-              prediction_files = glob.glob('predictions/*.csv') + glob.glob('predictions/*.json')
-              for pred_file in prediction_files:
-                  if 'latest_prediction' not in pred_file and 'aqi_alerts' not in pred_file:
-                      filename = os.path.basename(pred_file)
-                      hf_path = f'predictions/{timestamp}_{filename}'
-                      
-                      api.upload_file(
-                          path_or_fileobj=pred_file,
-                          path_in_repo=hf_path,
-                          repo_id=repo_id,
-                          commit_message=f'🔮 Upload predictions: {timestamp}'
-                      )
-                      print(f'✅ Uploaded {pred_file} to Hugging Face Hub')
-                      
-          except Exception as e:
-              print(f'❌ Prediction upload failed: {str(e)}')
-          "
+      - name: Upload Best Model to Hub
+        run: python model_upload_job.py
       
-      - name: Commit predictions metadata
+      - name: Commit model status
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "$(date -u '+%Y-%m-%d %H:%M UTC')" > data/predictions/last_prediction.txt
-          git add data/predictions/last_prediction.txt || echo "No prediction metadata to add"
-          git commit -m "🔮 Update prediction metadata: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
+          
+          git add models/
+          git add explainability/
+          git commit -m "🤖 Update model status: $(date -u '+%Y-%m-%d %H:%M UTC')" || echo "Nothing to commit"
           git push origin main || echo "Push failed"
-
-  deploy-streamlit:
+  
+  inference:
     runs-on: ubuntu-latest
-    needs: [setup, data-fetching, model-training, inference]
-    if: needs.setup.outputs.should-infer != 'false' && (needs.model-training.result == 'success' || needs.model-training.result == 'skipped')
+    needs: [setup, model-training]
+    if: needs.setup.outputs.should-infer != 'false'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -861,59 +636,66 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt || pip install requests pandas numpy scikit-learn xgboost joblib streamlit plotly huggingface_hub
       
-      - name: Set up Git LFS
+      - name: Run inference
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          sudo apt-get install git-lfs
-          git lfs install
-          git lfs pull
+          python inference/predict.py
+  
+  deploy-streamlit:
+    runs-on: ubuntu-latest
+    needs: [setup, inference]
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
       
-      - name: Deploy Streamlit app to Hugging Face Spaces
+      - name: Install Streamlit and dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt || pip install streamlit pandas plotly joblib huggingface_hub
+          
+      - name: Check Streamlit app file
+        id: check_app
+        run: |
+          if [ -f app.py ]; then
+            echo "Streamlit app.py file exists. Proceeding with deployment."
+          else
+            echo "Error: app.py not found. Please ensure the file is in the repository root."
+            exit 1
+          fi
+
+      - name: Deploy to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ env.HF_SPACE }}
         run: |
           python -c "
           import os
-          import shutil
-          from huggingface_hub import HfApi
+          from huggingface_hub import HfApi, login
           
           try:
-              api = HfApi()
               space_id = os.environ.get('HF_SPACE')
+              if not space_id:
+                  raise ValueError('HF_SPACE environment variable is not set.')
               
-              if not os.environ.get('HF_TOKEN'):
-                  print('❌ HF_TOKEN not set in secrets. Aborting deployment.')
-                  exit(1)
+              print(f'Attempting to deploy app to Hugging Face Space: {space_id}')
               
-              space_repo_name = space_id.split('/')[-1]
+              login(token=os.environ.get('HF_TOKEN'))
               
-              # Clone the Space repository to get a local copy
-              print(f'Cloning Hugging Face Space: {space_id}')
-              api.repo_info(repo_id=space_id) # check if repo exists
-              
-              os.system(f'git clone https://huggingface.co/spaces/{space_id}')
-              os.chdir(space_repo_name)
-              os.system('git config user.name "github-actions[bot]"')
-              os.system('git config user.email "github-actions[bot]@users.noreply.github.com"')
-              os.system('git pull')
-              
-              # Move back to the main repo root
-              os.chdir('..')
-              
-              # Copy files from your main repository into the cloned Space directory
-              shutil.copy('app.py', space_repo_name)
-              shutil.copy('requirements.txt', space_repo_name)
-              
-              os.makedirs(os.path.join(space_repo_name, 'predictions'), exist_ok=True)
-              os.makedirs(os.path.join(space_repo_name, 'data', 'raw'), exist_ok=True)
-              
-              shutil.copytree('predictions', os.path.join(space_repo_name, 'predictions'), dirs_exist_ok=True)
-              shutil.copytree('data/raw', os.path.join(space_repo_name, 'data', 'raw'), dirs_exist_ok=True)
-              
-              # Move into the Space directory for commit and push
-              os.chdir(space_repo_name)
-              os.system('git add .')
-              os.system('git commit -m "🚀 Update Streamlit app via GitHub Actions" || echo "No changes to commit"')
-              os.system('git push')
+              api = HfApi()
+              api.upload_folder(
+                  repo_id=space_id,
+                  folder_path='./',
+                  path_in_repo='./',
+                  repo_type='space',
+                  commit_message='🚀 Deploy Streamlit app from GitHub Actions'
+              )
               
               print(f'✅ Successfully deployed to Hugging Face Spaces!')
               print(f'🌐 Your app is available at: https://huggingface.co/spaces/{space_id}')
@@ -922,6 +704,7 @@ jobs:
               print(f'❌ Deployment to HF Spaces failed: {str(e)}')
               exit(1)
           "
+
   notify:
     runs-on: ubuntu-latest
     needs: [data-fetching, model-training, inference, deploy-streamlit]
@@ -938,6 +721,4 @@ jobs:
           echo "🤗 **Hugging Face Integration:**" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 Models & Data: [HF Hub](${{ env.HF_REPO }})" >> $GITHUB_STEP_SUMMARY
           echo "- 🌐 Live Dashboard: [HF Spaces](${{ env.HF_SPACE }})" >> $GITHUB_STEP_SUMMARY
-          echo "- 🎯 Only models with RMSE < 40 are saved" >> $GITHUB_STEP_SUMMARY
-          echo "- ⚡ Auto-updating dashboard with latest models" >> $GITHUB_STEP_SUMMARY
 
