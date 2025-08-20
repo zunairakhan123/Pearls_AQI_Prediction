@@ -534,13 +534,13 @@ jobs:
             echo "data_fetch=false" >> $GITHUB_OUTPUT
           fi
           
-          if [[ ("$event" == "schedule" && "$schedule" == "0 6 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
+          if [[ ("$event" == "schedule" && "$schedule" == "0 1 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
             echo "training=true" >> $GITHUB_OUTPUT
           else
             echo "training=false" >> $GITHUB_OUTPUT
           fi
           
-          if [[ "$event" == "schedule" || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
+          if [[ ("$event" == "schedule" && "$schedule" == "0 */6 * * *") || "$event" == "workflow_dispatch" || "$event" == "push" ]]; then
             echo "inference=true" >> $GITHUB_OUTPUT
           else
             echo "inference=false" >> $GITHUB_OUTPUT
